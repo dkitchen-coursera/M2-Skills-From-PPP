@@ -1,64 +1,117 @@
 # PPP Prototype — Personalized Progressive Pathways
 
-A conversational AI prototype where Coursera Plus learners explore career goals, share their background and constraints, and receive a personalized learning plan.
+A conversational AI prototype where Coursera Plus learners explore career goals, share their background and constraints, and receive a personalized, skills-focused learning plan. Built for rapid user testing (April 2026).
 
-## Adding a New Prompt Variant
+## Demo Flows
 
-The prototype supports multiple prompt variants that can be selected via URL parameter. For example, `/?prompt=experimental` uses the experimental prompt. This guide explains how to add a new one using the GitHub website — no local development setup required.
+The prototype runs in **mock mode** (no API key required) with two scripted conversation paths. Both are accessible from the entry screen prompt pills.
 
-### Step 1: Copy an existing prompt file
+### Flow 1: Role-Based Path (4 steps)
 
-1. Go to the repo on GitHub: **webedx-spark/ppp-prototype**
-2. Navigate to **`src/lib/prompts/`**
-3. Open an existing prompt file (e.g., `experimental.ts`) and click the **copy raw contents** button to copy its contents
-4. Go back to **`src/lib/prompts/`**, click **"Add file"** > **"Create new file"**
-5. Name the file whatever you want your URL parameter to be, with `.ts` at the end
-   - Example: if you want `?prompt=concise`, name the file **`concise.ts`**
-6. Paste the copied contents and edit the prompt text to your liking
-7. Update the function name to match your file (e.g., `buildSystemPromptConcise`)
-8. Scroll down, select **"Create a new branch"**, and click **"Propose new file"**
+Click **"I want to become a Data Analyst"** (or any role pill).
 
-### Step 2: Register the file
+1. AI confirms the role and asks about current skills/experience
+2. Learner shares background
+3. AI asks about timeline and availability
+4. Learner provides constraints → plan auto-generates
 
-You also need to tell the app about your new file. This is one small edit:
+The generated plan includes milestones targeting all skills for the chosen role.
 
-1. In the same branch, navigate to **`src/lib/prompts/get-system-prompt.ts`**
-2. Click the **pencil icon** to edit
-3. Add an import line at the top with the others:
+### Flow 2: Skills-First Path (3 steps)
 
-   ```ts
-   import { buildSystemPromptConcise as buildConcise } from "./concise";
-   ```
+Click **"I want to learn SQL and data visualization"** (or any skills pill).
 
-4. Add a line inside the `promptRegistry` object:
+1. AI confirms the skills and asks about current role/experience
+2. Learner shares background → AI asks about timeline
+3. Learner provides constraints → plan auto-generates (auto-maps to closest role)
 
-   ```ts
-   concise: () => buildConcise(),
-   ```
+The generated plan focuses specifically on the named skills with a shorter milestone set.
 
-5. Commit the change to the same branch
+### After Plan Generation
 
-### Step 3: Merge and deploy
+Once a plan is generated, the learner lands on the **My Learning** page with tabs:
 
-1. Open a Pull Request from your branch into `main`
-2. Once merged, the app will automatically redeploy on AWS Amplify (~5 minutes)
+- **My Plan** — Full plan with milestones and courses. Click "Start learning plan" to enter the course experience (LEX).
+- **In Progress** — Courses grouped by partner with progress indicators.
+- **Skills** — Role-focused skill areas with XP progress bars. "Should" skills are above the fold; other skill tiers are expandable below.
 
-### Step 4: Test your prompt
+### Inside a Course (LEX)
 
-Once the deploy finishes, open the prototype with your file name as the `prompt` parameter:
+The learning experience shows a sidebar syllabus with video, reading, practice, and graded items. Completing items earns Skill XP that feeds back into the Skills tab and plan mastery percentage.
+
+### Celebration Events
+
+- **Module Complete** — Triggered when all items in a module are done. Shows skill progress bars and overall plan mastery percentage.
+- **Course Complete** — Triggered when all items in a course are done. Full-screen takeover with certificate card, LinkedIn share button, and plan progress timeline showing what's next.
+- **Role Mastery** — Triggered when all "should" skills reach mastery. Congratulations screen with option to explore a new role.
+
+## Proto Tools
+
+A floating **"P" button** (bottom-right corner) opens the proto tools panel for demo control:
+
+| Button | What it does |
+|--------|-------------|
+| **Jump to role** | Select any role from the catalog to set up role progress and start a conversation |
+| **Set All Mastered** | Max out all skill XP for the active role |
+| **Set Random Progress** | Randomize skill XP values for realistic-looking progress |
+| **Reset Progress** | Zero out all skill XP |
+| **Trigger Role Mastery** | Set all skills to mastered and show the role mastery celebration |
+| **Trigger Module Complete** | Complete all items in the current module, award XP, and show the module complete modal (only available inside LEX) |
+| **Trigger Course Complete** | Complete all items in the entire course, award all XP, and show the course complete screen (only available inside LEX) |
+
+## Prototype Features
+
+- Conversational onboarding to identify goal role & current experience
+- Two mock paths: role-based (4-step) and skills-first (3-step)
+- Skills-focused course plan generation (master skills, not just complete courses)
+- Course item completion earns Skill XP toward role goals
+- Role-focused Skills tab highlighting goal-relevant skills above the fold
+- Module complete celebration with skill progress & plan-level mastery %
+- Course complete screen with certificate, LinkedIn share & plan progress timeline
+- Per-course completion tracking in My Plan and In Progress tabs
+- Role mastery celebration on plan completion
+- Role catalog (4 roles, 8 skills each)
+- XP-based progress tracking (0-1500 per skill)
+- Proto tools panel for triggering demo events
+
+## Tech Stack
+
+- **Framework**: Next.js 15 (App Router, TypeScript, React 19)
+- **AI**: OpenAI API via Vercel AI SDK (`useChat`, streaming, structured output)
+- **Styling**: Tailwind CSS v4
+- **State**: Zustand + AI SDK conversation state
+- **Deployment**: AWS Amplify (standalone output mode)
+
+## Getting Started
+
+```bash
+npm install
+npm run dev
+```
+
+The app runs at `http://localhost:3000`. No API key is needed — mock mode activates automatically when `OPENAI_API_KEY` is not set.
+
+To enable live AI mode, create `.env.local`:
 
 ```
-https://main.dcpllor2muuz3.amplifyapp.com/?prompt=concise
+OPENAI_API_KEY=sk-...
 ```
 
-You should see a red banner at the top saying **"Prompt variant: concise"** confirming it's active.
+## Prompt Variants
 
-### Quick reference
+The prototype supports multiple prompt variants selectable via URL parameter.
 
-| File name          | URL to use it          |
-| ------------------ | ---------------------- |
-| `default.ts`       | `https://main.dcpllor2muuz3.amplifyapp.com/` (no param needed)  |
-| `experimental.ts`  | `https://main.dcpllor2muuz3.amplifyapp.com/?prompt=experimental` |
-| `onboarded.ts`     | `https://main.dcpllor2muuz3.amplifyapp.com/?prompt=onboarded`   |
+| Variant | URL |
+|---------|-----|
+| Default | `/` (no param needed) |
+| Experimental | `/?prompt=experimental` |
+| Onboarded | `/?prompt=onboarded` |
 
-If the URL param doesn't match any registered file, it silently falls back to the default prompt.
+A red banner at the top confirms which variant is active. See `src/lib/prompts/` to add new variants.
+
+### Adding a New Prompt Variant
+
+1. Copy an existing file in `src/lib/prompts/` (e.g., `experimental.ts`)
+2. Name it to match your desired URL param (e.g., `concise.ts` for `?prompt=concise`)
+3. Register it in `src/lib/prompts/get-system-prompt.ts` by adding an import and entry in `promptRegistry`
+4. Merge to `main` — Amplify auto-deploys in ~5 minutes
