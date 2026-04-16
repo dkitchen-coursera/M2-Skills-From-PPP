@@ -11,6 +11,7 @@ interface ProtoToolsPanelProps {
   onResetProgress: () => void;
   onTriggerMastery: () => void;
   onTriggerModuleComplete: () => void;
+  onTriggerCourseComplete: () => void;
   onJumpToRole: (roleId: string) => void;
   isInLex?: boolean;
 }
@@ -22,11 +23,13 @@ export function ProtoToolsPanel({
   onResetProgress,
   onTriggerMastery,
   onTriggerModuleComplete,
+  onTriggerCourseComplete,
   onJumpToRole,
   isInLex,
 }: ProtoToolsPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showFeatures, setShowFeatures] = useState(false);
+  const [showPppTools, setShowPppTools] = useState(false);
 
   return (
     <>
@@ -46,52 +49,8 @@ export function ProtoToolsPanel({
             Proto Tools
           </h3>
 
-          {/* Jump to role */}
-          <div className="mb-3">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
-              Jump to role
-            </label>
-            <select
-              onChange={(e) => {
-                if (e.target.value) onJumpToRole(e.target.value);
-              }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              defaultValue=""
-            >
-              <option value="" disabled>
-                Select a role...
-              </option>
-              {ROLE_CATALOG.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Actions */}
           <div className="space-y-2">
-            <button
-              onClick={onSetAllMastered}
-              disabled={!roleProgress}
-              className="w-full rounded-lg bg-[var(--cds-color-green-600)] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--cds-color-green-700)] disabled:opacity-40"
-            >
-              Set All Mastered
-            </button>
-            <button
-              onClick={onSetRandomProgress}
-              disabled={!roleProgress}
-              className="w-full rounded-lg bg-[var(--cds-color-purple-600)] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--cds-color-purple-700)] disabled:opacity-40"
-            >
-              Set Random Progress
-            </button>
-            <button
-              onClick={onResetProgress}
-              disabled={!roleProgress}
-              className="w-full rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-300 disabled:opacity-40"
-            >
-              Reset Progress
-            </button>
             <button
               onClick={onTriggerMastery}
               disabled={!roleProgress}
@@ -106,7 +65,69 @@ export function ProtoToolsPanel({
             >
               Trigger Module Complete
             </button>
+            <button
+              onClick={onTriggerCourseComplete}
+              disabled={!isInLex}
+              className="w-full rounded-lg bg-[#8040ed] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#6b30d4] disabled:opacity-40"
+            >
+              Trigger Course Complete
+            </button>
           </div>
+
+          {/* PPP demo tools dropdown */}
+          <button
+            onClick={() => setShowPppTools(!showPppTools)}
+            className="mt-3 flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
+          >
+            PPP demo tools
+            <span className="text-[10px]">{showPppTools ? "\u25B2" : "\u25BC"}</span>
+          </button>
+          {showPppTools && (
+            <div className="mt-1 space-y-2 rounded-lg border border-gray-100 bg-gray-50 p-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">
+                  Jump to role
+                </label>
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) onJumpToRole(e.target.value);
+                  }}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs"
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Select a role...
+                  </option>
+                  {ROLE_CATALOG.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={onSetAllMastered}
+                disabled={!roleProgress}
+                className="w-full rounded-lg bg-[var(--cds-color-green-600)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--cds-color-green-700)] disabled:opacity-40"
+              >
+                Set All Mastered
+              </button>
+              <button
+                onClick={onSetRandomProgress}
+                disabled={!roleProgress}
+                className="w-full rounded-lg bg-[var(--cds-color-purple-600)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--cds-color-purple-700)] disabled:opacity-40"
+              >
+                Set Random Progress
+              </button>
+              <button
+                onClick={onResetProgress}
+                disabled={!roleProgress}
+                className="w-full rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-300 disabled:opacity-40"
+              >
+                Reset Progress
+              </button>
+            </div>
+          )}
 
           {/* Feature list toggle */}
           <button
@@ -124,6 +145,7 @@ export function ProtoToolsPanel({
                 <li>Course item completion earns Skill XP toward role goals</li>
                 <li>Role-focused Skills tab highlighting goal-relevant skills</li>
                 <li>Module complete celebration with skill progress &amp; plan-level mastery %</li>
+                <li>Course complete screen with certificate, LinkedIn share &amp; plan progress timeline</li>
                 <li>Role mastery celebration on plan completion</li>
                 <li>Role catalog (4 roles, 8 skills each)</li>
                 <li>XP-based progress tracking (0-1500 per skill)</li>

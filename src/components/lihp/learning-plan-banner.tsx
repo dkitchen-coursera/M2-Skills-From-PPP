@@ -12,6 +12,7 @@ interface LearningPlanBannerProps {
   pendingRemovals?: Set<string>;
   swapDisabled?: boolean;
   isRefining?: boolean;
+  completedCourseIds?: Set<string>;
   onRemoveCourse?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreAlternatives?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onStartPlan?: () => void;
@@ -162,6 +163,7 @@ function ExpandedCourseRow({
   milestoneName,
   isLast = false,
   isPending = false,
+  isCompleted = false,
   swapDisabled = false,
   onRemove,
   onExploreAlternatives,
@@ -170,6 +172,7 @@ function ExpandedCourseRow({
   milestoneName: string;
   isLast?: boolean;
   isPending?: boolean;
+  isCompleted?: boolean;
   swapDisabled?: boolean;
   onRemove?: () => void;
   onExploreAlternatives?: () => void;
@@ -187,7 +190,7 @@ function ExpandedCourseRow({
   const productLabel = formatProductType(course.productType);
 
   return (
-    <div className="group flex items-start gap-3 py-3 pl-[40px]">
+    <div className={clsx("group flex items-start gap-3 py-3 pl-[40px]", isCompleted && "opacity-70")}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={course.imageUrl}
@@ -196,14 +199,26 @@ function ExpandedCourseRow({
       />
       <div className="min-w-0 flex-1 space-y-2">
         <div>
-          <a
-            href={"https://www.coursera.org" + course.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-semibold text-[#0f1114] hover:underline"
-          >
-            {course.name}
-          </a>
+          <div className="flex items-center gap-1.5">
+            {isCompleted && (
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#137333]">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            )}
+            <a
+              href={"https://www.coursera.org" + course.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={clsx(
+                "text-sm font-semibold hover:underline",
+                isCompleted ? "text-[#5b6780]" : "text-[#0f1114]",
+              )}
+            >
+              {course.name}
+            </a>
+          </div>
           {/* Metadata below name */}
           <div className="flex items-center gap-1 text-xs text-[#5b6780]">
             <PartnerLogos partners={course.partners} partnerLogos={course.partnerLogos} />
@@ -212,6 +227,12 @@ function ExpandedCourseRow({
             <span>{course.duration || "12 hours"}</span>
             <span>·</span>
             <span>{productLabel}</span>
+            {isCompleted && (
+              <>
+                <span>·</span>
+                <span className="font-medium text-[#137333]">Completed</span>
+              </>
+            )}
           </div>
         </div>
         {/* Product type tag */}
@@ -219,18 +240,20 @@ function ExpandedCourseRow({
           <ProductTypeTag productType={course.productType} />
         </div>
       </div>
-      {/* Right side: edit icon */}
-      <div className="relative flex shrink-0 items-center">
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="flex h-5 w-5 items-center justify-center rounded text-[#5b6780] opacity-0 transition-opacity hover:bg-[#f0f6ff] group-hover:opacity-100"
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path fillRule="evenodd" clipRule="evenodd" d="M10.9866 5.48355C11.6314 4.83882 12.6767 4.83882 13.3214 5.48355L14.5165 6.67859C15.1612 7.32331 15.1612 8.36862 14.5165 9.01335L8.69099 14.8388C8.58779 14.942 8.44781 15 8.30186 15H5.55031C5.24638 15 5 14.7536 5 14.4497V11.6981C5 11.5522 5.05798 11.4122 5.16118 11.309L10.9866 5.48355ZM12.5432 6.2618C12.3283 6.04689 11.9798 6.04689 11.7649 6.2618L11.2814 6.74535L13.2547 8.71864L13.7382 8.2351C13.9531 8.02019 13.9531 7.67175 13.7382 7.45684L12.5432 6.2618ZM12.4764 9.4969L10.5031 7.5236L6.10062 11.9261V13.8994H8.07391L12.4764 9.4969Z" fill="#6D7C99"/>
-          </svg>
-        </button>
-        {menuOpen && <CourseEditMenu onClose={() => setMenuOpen(false)} onRemove={onRemove} onExploreAlternatives={onExploreAlternatives} swapDisabled={swapDisabled} openUp={isLast} />}
-      </div>
+      {/* Right side: edit icon (hidden for completed courses) */}
+      {!isCompleted && (
+        <div className="relative flex shrink-0 items-center">
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="flex h-5 w-5 items-center justify-center rounded text-[#5b6780] opacity-0 transition-opacity hover:bg-[#f0f6ff] group-hover:opacity-100"
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path fillRule="evenodd" clipRule="evenodd" d="M10.9866 5.48355C11.6314 4.83882 12.6767 4.83882 13.3214 5.48355L14.5165 6.67859C15.1612 7.32331 15.1612 8.36862 14.5165 9.01335L8.69099 14.8388C8.58779 14.942 8.44781 15 8.30186 15H5.55031C5.24638 15 5 14.7536 5 14.4497V11.6981C5 11.5522 5.05798 11.4122 5.16118 11.309L10.9866 5.48355ZM12.5432 6.2618C12.3283 6.04689 11.9798 6.04689 11.7649 6.2618L11.2814 6.74535L13.2547 8.71864L13.7382 8.2351C13.9531 8.02019 13.9531 7.67175 13.7382 7.45684L12.5432 6.2618ZM12.4764 9.4969L10.5031 7.5236L6.10062 11.9261V13.8994H8.07391L12.4764 9.4969Z" fill="#6D7C99"/>
+            </svg>
+          </button>
+          {menuOpen && <CourseEditMenu onClose={() => setMenuOpen(false)} onRemove={onRemove} onExploreAlternatives={onExploreAlternatives} swapDisabled={swapDisabled} openUp={isLast} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -259,6 +282,7 @@ function MilestoneCard({
   index,
   pendingRemovals,
   swapDisabled,
+  completedCourseIds,
   onRemoveCourse,
   onExploreAlternatives,
 }: {
@@ -266,6 +290,7 @@ function MilestoneCard({
   index: number;
   pendingRemovals?: Set<string>;
   swapDisabled?: boolean;
+  completedCourseIds?: Set<string>;
   onRemoveCourse?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreAlternatives?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
 }) {
@@ -274,8 +299,13 @@ function MilestoneCard({
   const uniqueLogos = milestone.courses.flatMap((c) => c.partnerLogos).filter((v, i, a) => a.indexOf(v) === i);
   const parsed = parseDescription(milestone.description);
 
+  const completedCount = completedCourseIds
+    ? milestone.courses.filter((c) => completedCourseIds.has(c.id)).length
+    : 0;
+  const allCompleted = completedCount > 0 && completedCount === milestone.courses.length;
+
   return (
-    <div className="relative rounded-2xl bg-white px-4">
+    <div className={clsx("relative rounded-2xl px-4", allCompleted ? "bg-[#f0faf3]" : "bg-white")}>
       {/* Milestone header — always visible */}
       <button
         type="button"
@@ -285,14 +315,22 @@ function MilestoneCard({
           expanded && "border-b border-[#dae1ed]",
         )}
       >
-        {/* Milestone number */}
-        <div className="flex h-[25px] w-[25px] shrink-0 items-center justify-center rounded bg-[#f2f5fa]">
-          <span className="text-xs font-semibold text-[#0f1114]">{index}</span>
-        </div>
+        {/* Milestone number or checkmark */}
+        {allCompleted ? (
+          <div className="flex h-[25px] w-[25px] shrink-0 items-center justify-center rounded-full bg-[#137333]">
+            <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
+              <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        ) : (
+          <div className="flex h-[25px] w-[25px] shrink-0 items-center justify-center rounded bg-[#f2f5fa]">
+            <span className="text-xs font-semibold text-[#0f1114]">{index}</span>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <p className="text-base font-semibold tracking-tight text-[#0f1114]">{milestone.name}</p>
+          <p className={clsx("text-base font-semibold tracking-tight", allCompleted ? "text-[#137333]" : "text-[#0f1114]")}>{milestone.name}</p>
           {/* Description line: bold prefix + regular skills */}
           {parsed ? (
             <p className="text-xs text-[#0f1114]">
@@ -320,7 +358,9 @@ function MilestoneCard({
             <div className="flex items-center gap-2">
               <PartnerLogos partners={uniquePartners} partnerLogos={uniqueLogos} />
               <span className="text-xs text-[#5b6780]">
-                {formatCourseCount(milestone.courses)}
+                {completedCount > 0
+                  ? `${completedCount} of ${milestone.courses.length} completed`
+                  : formatCourseCount(milestone.courses)}
               </span>
             </div>
           )}
@@ -343,6 +383,7 @@ function MilestoneCard({
               milestoneName={milestone.name}
               isLast={idx === milestone.courses.length - 1}
               isPending={pendingRemovals?.has(course.id) ?? false}
+              isCompleted={completedCourseIds?.has(course.id) ?? false}
               swapDisabled={swapDisabled}
               onRemove={() => onRemoveCourse?.(course.id, course.name, milestone.id, milestone.name)}
               onExploreAlternatives={() => onExploreAlternatives?.(course.id, course.name, milestone.id, milestone.name)}
@@ -354,7 +395,13 @@ function MilestoneCard({
   );
 }
 
-export function LearningPlanBanner({ plan, onViewPlan, pendingRemovals, swapDisabled, isRefining, onRemoveCourse, onExploreAlternatives, onStartPlan, planStarted }: LearningPlanBannerProps) {
+export function LearningPlanBanner({ plan, onViewPlan, pendingRemovals, swapDisabled, isRefining, completedCourseIds, onRemoveCourse, onExploreAlternatives, onStartPlan, planStarted }: LearningPlanBannerProps) {
+  const totalCourses = plan.milestones.reduce((sum, ms) => sum + ms.courses.length, 0);
+  const completedCount = completedCourseIds
+    ? plan.milestones.reduce((sum, ms) => sum + ms.courses.filter((c) => completedCourseIds.has(c.id)).length, 0)
+    : 0;
+  const hasProgress = completedCount > 0;
+
   return (
     <div
       className="rounded-2xl border border-[#dae1ed] bg-[#f0f6ff] p-5"
@@ -392,6 +439,21 @@ export function LearningPlanBanner({ plan, onViewPlan, pendingRemovals, swapDisa
         </button>
       </div>
 
+      {/* Progress bar — shown after at least one course is completed */}
+      {hasProgress && (
+        <div className="mt-3 flex items-center gap-3">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-white">
+            <div
+              className="h-full rounded-full bg-[#137333] transition-all duration-500"
+              style={{ width: `${Math.round((completedCount / totalCourses) * 100)}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-xs font-medium text-[#137333]">
+            {completedCount} of {totalCourses} courses completed
+          </span>
+        </div>
+      )}
+
       {/* Milestone course cards — replaced with shimmer skeleton when refining */}
       <div className="mt-3 space-y-2">
         {isRefining ? (
@@ -416,6 +478,7 @@ export function LearningPlanBanner({ plan, onViewPlan, pendingRemovals, swapDisa
               index={msIdx + 1}
               pendingRemovals={pendingRemovals}
               swapDisabled={swapDisabled}
+              completedCourseIds={completedCourseIds}
               onRemoveCourse={onRemoveCourse}
               onExploreAlternatives={onExploreAlternatives}
             />

@@ -4,6 +4,7 @@ import type { LearningPlan, PlanCourse } from "@/lib/plan-types";
 
 interface InProgressTabProps {
   plan: LearningPlan | null;
+  completedCourseIds?: Set<string>;
   onResumeCourse?: (course: PlanCourse) => void;
 }
 
@@ -12,27 +13,40 @@ function CourseProgressCard({
   courseIndex,
   totalCourses,
   isActive,
+  isCompleted,
   onResume,
 }: {
   course: PlanCourse;
   courseIndex: number;
   totalCourses: number;
   isActive: boolean;
+  isCompleted: boolean;
   onResume?: () => void;
 }) {
-  const progress = isActive ? Math.floor(Math.random() * 60) + 10 : 0;
+  const progress = isCompleted ? 100 : isActive ? Math.floor(Math.random() * 60) + 10 : 0;
 
   return (
     <div className="flex items-center justify-between gap-4 border-b border-[#e3e8ef] py-4 last:border-0">
       <div className="min-w-0 flex-1">
-        <h4 className="text-sm font-medium text-[#0056d2]">{course.name}</h4>
+        <div className="flex items-center gap-1.5">
+          {isCompleted && (
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#137333]">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          )}
+          <h4 className={`text-sm font-medium ${isCompleted ? "text-[#5b6780]" : "text-[#0056d2]"}`}>{course.name}</h4>
+        </div>
         <p className="mt-0.5 text-xs text-[#5b6780]">
           Course {courseIndex} of {totalCourses}
-          {isActive
-            ? ` · ${progress}% Complete`
-            : " · Not started"}
+          {isCompleted
+            ? " · Completed"
+            : isActive
+              ? ` · ${progress}% Complete`
+              : " · Not started"}
         </p>
-        {isActive && (
+        {!isCompleted && isActive && (
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e3e8ef]">
             <div
               className="h-full rounded-full bg-[#137333] transition-all duration-300"
@@ -40,8 +54,13 @@ function CourseProgressCard({
             />
           </div>
         )}
+        {isCompleted && (
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e3e8ef]">
+            <div className="h-full rounded-full bg-[#137333]" style={{ width: "100%" }} />
+          </div>
+        )}
       </div>
-      {isActive && onResume && (
+      {!isCompleted && isActive && onResume && (
         <button
           onClick={onResume}
           className="shrink-0 rounded-lg bg-[#0056d2] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0048b0] transition-colors"
@@ -58,14 +77,19 @@ function CertificateCard({
   partner,
   partnerLogo,
   courses,
+  completedCourseIds,
   onResumeCourse,
 }: {
   title: string;
   partner: string;
   partnerLogo?: string;
   courses: PlanCourse[];
+  completedCourseIds?: Set<string>;
   onResumeCourse?: (course: PlanCourse) => void;
 }) {
+  // Find the first non-completed course to mark as active
+  const firstActiveIdx = courses.findIndex((c) => !completedCourseIds?.has(c.id));
+
   return (
     <div className="rounded-2xl border border-[#e3e8ef] bg-white p-6 shadow-sm">
       {/* Header */}
@@ -89,7 +113,8 @@ function CertificateCard({
             course={course}
             courseIndex={idx + 1}
             totalCourses={courses.length}
-            isActive={idx === 0}
+            isActive={idx === firstActiveIdx}
+            isCompleted={completedCourseIds?.has(course.id) ?? false}
             onResume={() => onResumeCourse?.(course)}
           />
         ))}
@@ -98,7 +123,7 @@ function CertificateCard({
   );
 }
 
-export function InProgressTab({ plan, onResumeCourse }: InProgressTabProps) {
+export function InProgressTab({ plan, completedCourseIds, onResumeCourse }: InProgressTabProps) {
   if (!plan) {
     return (
       <div className="rounded-xl border border-dashed border-[#dae1ed] bg-[#fafbfc] px-6 py-10 text-center">
@@ -142,6 +167,7 @@ export function InProgressTab({ plan, onResumeCourse }: InProgressTabProps) {
           partner={group.partner}
           partnerLogo={group.partnerLogo}
           courses={group.courses}
+          completedCourseIds={completedCourseIds}
           onResumeCourse={onResumeCourse}
         />
       ))}

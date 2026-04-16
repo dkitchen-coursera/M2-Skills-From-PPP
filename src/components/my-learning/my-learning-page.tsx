@@ -29,6 +29,7 @@ interface MyLearningPageProps {
   pendingRemovals: Set<string>;
   swapDisabled?: boolean;
   roleProgress: RoleProgress | null;
+  completedCourseIds?: Set<string>;
   onSend: (text: string) => void;
   onRetry: () => void;
   onRemoveCourse: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
@@ -77,6 +78,7 @@ export function MyLearningPage({
   pendingRemovals,
   swapDisabled,
   roleProgress,
+  completedCourseIds,
   onSend,
   onRetry,
   onRemoveCourse,
@@ -190,7 +192,7 @@ export function MyLearningPage({
 
             {/* Tab content */}
             {activeTab === "in-progress" && (
-              <InProgressTab plan={plan} onResumeCourse={onResumeCourse} />
+              <InProgressTab plan={plan} completedCourseIds={completedCourseIds} onResumeCourse={onResumeCourse} />
             )}
             {activeTab === "my-plan" && (
               <MyPlanTab
@@ -201,6 +203,7 @@ export function MyLearningPage({
                 pendingRemovals={pendingRemovals}
                 swapDisabled={swapDisabled}
                 roleProgress={roleProgress}
+                completedCourseIds={completedCourseIds}
                 onRemoveCourse={onRemoveCourse}
                 onExploreAlternatives={onExploreAlternatives}
                 onExploreNextRole={onExploreNextRole}

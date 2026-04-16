@@ -24,11 +24,13 @@ interface LexPageProps {
   roleProgress: RoleProgress | null;
   onXpEarned: (skillXpMap: Record<string, number>) => void;
   onExit: () => void;
+  onCourseComplete: () => void;
   itemsCompleted: number;
   onRegisterTriggerModuleComplete?: (trigger: () => void) => void;
+  onRegisterTriggerCourseComplete?: (trigger: () => void) => void;
 }
 
-export function LexPage({ course, roleProgress, onXpEarned, onExit, itemsCompleted, onRegisterTriggerModuleComplete }: LexPageProps) {
+export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComplete, itemsCompleted, onRegisterTriggerModuleComplete, onRegisterTriggerCourseComplete }: LexPageProps) {
   const syllabus = useMemo(() => generateSyllabusForCourse(course), [course]);
 
   const allItems = useMemo(
@@ -108,6 +110,49 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, itemsComplet
       setModalState({ type: "module-complete", module });
     });
   }, [onRegisterTriggerModuleComplete, activeItemId, syllabus, onXpEarned]);
+
+  // Register proto tools trigger for course complete
+  useEffect(() => {
+    if (!onRegisterTriggerCourseComplete) return;
+    onRegisterTriggerCourseComplete(() => {
+      // Complete ALL uncompleted items in the entire course and award XP
+      setCompletedItemIds((prev) => {
+        const next = new Set(prev);
+        let addedXp = 0;
+        let addedPractice = 0;
+        const aggregatedSkillXp: Record<string, number> = {};
+
+        for (const item of allItems) {
+          if (!next.has(item.id)) {
+            next.add(item.id);
+            addedXp += item.xpValue;
+            if (item.type === "practice" || item.type === "graded") {
+              addedPractice++;
+            }
+            const xpMap = distributeXpToSkills(item.xpValue, syllabus.targetSkillIds);
+            for (const [skillId, xp] of Object.entries(xpMap)) {
+              aggregatedSkillXp[skillId] = (aggregatedSkillXp[skillId] ?? 0) + xp;
+            }
+          }
+        }
+
+        if (Object.keys(aggregatedSkillXp).length > 0) {
+          onXpEarned(aggregatedSkillXp);
+        }
+        if (addedXp > 0) {
+          setSessionXp((prev) => prev + addedXp);
+        }
+        if (addedPractice > 0) {
+          setPracticeCompleted((prev) => prev + addedPractice);
+        }
+
+        return next;
+      });
+
+      // Notify app shell to show the course complete screen
+      onCourseComplete();
+    });
+  }, [onRegisterTriggerCourseComplete, allItems, syllabus.targetSkillIds, onXpEarned, onCourseComplete]);
 
   const findNextItem = useCallback(
     (currentId: string): LexItem | null => {
@@ -193,10 +238,18 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, itemsComplet
 
   const handleModuleCompleteContinue = useCallback(() => {
     setModalState({ type: "none" });
+
+    // Check if the entire course is now complete
+    const allDone = allItems.every((item) => completedItemIds.has(item.id));
+    if (allDone) {
+      onCourseComplete();
+      return;
+    }
+
     if (activeItem) {
       advanceToNext(activeItem.id);
     }
-  }, [activeItem]);
+  }, [activeItem, allItems, completedItemIds, onCourseComplete]);
 
   const totalItemsCompleted = itemsCompleted + completedItemIds.size;
 

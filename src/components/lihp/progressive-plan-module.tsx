@@ -15,6 +15,7 @@ interface ProgressivePlanModuleProps {
   swapDisabled?: boolean;
   onRemoveCourse?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreAlternatives?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
+  completedCourseIds?: Set<string>;
   onStartPlan?: () => void;
   planStarted?: boolean;
 }
@@ -80,6 +81,7 @@ export function ProgressivePlanModule({
   swapDisabled,
   onRemoveCourse,
   onExploreAlternatives,
+  completedCourseIds,
   onStartPlan,
   planStarted,
 }: ProgressivePlanModuleProps) {
@@ -117,6 +119,7 @@ export function ProgressivePlanModule({
         pendingRemovals={pendingRemovals}
         swapDisabled={swapDisabled}
         isRefining={isRefining}
+        completedCourseIds={completedCourseIds}
         onRemoveCourse={onRemoveCourse}
         onExploreAlternatives={onExploreAlternatives}
         onStartPlan={onStartPlan}

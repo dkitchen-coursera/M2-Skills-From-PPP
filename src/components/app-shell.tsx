@@ -36,6 +36,7 @@ import {
   completeCourse,
 } from "@/lib/skills-store";
 import { LexPage } from "@/components/lex/lex-page";
+import { CourseCompleteScreen } from "@/components/lex/course-complete-screen";
 
 const metadataJsonRegex = /```json\s*(\{[\s\S]*?\})\s*```\s*$/;
 
@@ -128,9 +129,12 @@ export function AppShell() {
   const messagesLengthRef = useRef(0); // tracks current messages length for onData
   const [roleProgress, setRoleProgress] = useState<RoleProgress | null>(null);
   const [activeLexCourse, setActiveLexCourse] = useState<PlanCourse | null>(null);
+  const [completedLexCourse, setCompletedLexCourse] = useState<PlanCourse | null>(null);
+  const [completedCourseIds, setCompletedCourseIds] = useState<Set<string>>(new Set());
   const [planStarted, setPlanStarted] = useState(false);
   const [lexItemsCompleted, setLexItemsCompleted] = useState(0);
   const lexTriggerModuleComplete = useRef<(() => void) | null>(null);
+  const lexTriggerCourseComplete = useRef<(() => void) | null>(null);
 
   const setPlan = setPlanState;
 
@@ -563,7 +567,26 @@ export function AppShell() {
 
   const handleExitLex = useCallback(() => {
     setActiveLexCourse(null);
+    setCompletedLexCourse(null);
     setPhase("plan_generated");
+  }, [setPhase]);
+
+  const handleCourseComplete = useCallback(() => {
+    // Store the completed course, track its ID, and transition to course-complete screen
+    if (activeLexCourse) {
+      setCompletedCourseIds(prev => new Set(prev).add(activeLexCourse.id));
+    }
+    setCompletedLexCourse(activeLexCourse);
+    setActiveLexCourse(null);
+    setPhase("course_complete");
+  }, [activeLexCourse, setPhase]);
+
+  const handleCourseCompleteStartNext = useCallback((course: PlanCourse) => {
+    setCompletedLexCourse(null);
+    setActiveLexCourse(course);
+    setPlanStarted(true);
+    setLexItemsCompleted(0);
+    setPhase("learning");
   }, [setPhase]);
 
   const handleLexXpEarned = useCallback((skillXpMap: Record<string, number>) => {
@@ -595,6 +618,10 @@ export function AppShell() {
 
   const handleProtoTriggerModuleComplete = useCallback(() => {
     lexTriggerModuleComplete.current?.();
+  }, []);
+
+  const handleProtoTriggerCourseComplete = useCallback(() => {
+    lexTriggerCourseComplete.current?.();
   }, []);
 
   const handleProtoJumpToRole = useCallback((roleId: string) => {
@@ -681,14 +708,24 @@ export function AppShell() {
           ].filter(Boolean).join(" · ")}
         </div>
       )}
-      {phase === "learning" && activeLexCourse ? (
+      {phase === "course_complete" && completedLexCourse ? (
+        <CourseCompleteScreen
+          completedCourse={completedLexCourse}
+          plan={plan}
+          roleProgress={roleProgress}
+          onStartCourse={handleCourseCompleteStartNext}
+          onBackToPlan={handleExitLex}
+        />
+      ) : phase === "learning" && activeLexCourse ? (
         <LexPage
           course={activeLexCourse}
           roleProgress={roleProgress}
           onXpEarned={handleLexXpEarned}
           onExit={handleExitLex}
+          onCourseComplete={handleCourseComplete}
           itemsCompleted={lexItemsCompleted}
           onRegisterTriggerModuleComplete={(trigger) => { lexTriggerModuleComplete.current = trigger; }}
+          onRegisterTriggerCourseComplete={(trigger) => { lexTriggerCourseComplete.current = trigger; }}
         />
       ) : phase === "entry" ? (
         <EntryScreen onSend={handleSend} />
@@ -723,6 +760,7 @@ export function AppShell() {
           pendingRemovals={pendingRemovals}
           swapDisabled={swapDisabled}
           roleProgress={roleProgress}
+          completedCourseIds={completedCourseIds}
           onSend={handleSend}
           onRetry={handleRetry}
           onRemoveCourse={handleRemoveCourse}
@@ -751,6 +789,7 @@ export function AppShell() {
         onResetProgress={handleProtoResetProgress}
         onTriggerMastery={handleProtoTriggerMastery}
         onTriggerModuleComplete={handleProtoTriggerModuleComplete}
+        onTriggerCourseComplete={handleProtoTriggerCourseComplete}
         onJumpToRole={handleProtoJumpToRole}
         isInLex={phase === "learning" && !!activeLexCourse}
       />

@@ -15,7 +15,8 @@ export type AppPhase =
   | "plan_generated"
   | "viewing_plan"
   | "role_mastery"
-  | "learning";
+  | "learning"
+  | "course_complete";
 
 export type GatheredInfo = {
   goal: string | null;
