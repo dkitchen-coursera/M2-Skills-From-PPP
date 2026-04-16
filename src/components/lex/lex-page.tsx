@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import type { PlanCourse } from "@/lib/plan-types";
 import type { RoleProgress } from "@/lib/skills-store";
 import type { LexItem, LexModule } from "@/lib/lex-types";
@@ -25,9 +25,10 @@ interface LexPageProps {
   onXpEarned: (skillXpMap: Record<string, number>) => void;
   onExit: () => void;
   itemsCompleted: number;
+  onRegisterTriggerModuleComplete?: (trigger: () => void) => void;
 }
 
-export function LexPage({ course, roleProgress, onXpEarned, onExit, itemsCompleted }: LexPageProps) {
+export function LexPage({ course, roleProgress, onXpEarned, onExit, itemsCompleted, onRegisterTriggerModuleComplete }: LexPageProps) {
   const syllabus = useMemo(() => generateSyllabusForCourse(course), [course]);
 
   const allItems = useMemo(
@@ -46,6 +47,67 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, itemsComplet
     () => allItems.find((item) => item.id === activeItemId) ?? null,
     [allItems, activeItemId],
   );
+
+  // Register proto tools trigger for module complete modal
+  useEffect(() => {
+    if (!onRegisterTriggerModuleComplete) return;
+    onRegisterTriggerModuleComplete(() => {
+      // Find the module containing the active item (or fall back to first module)
+      const module = activeItemId
+        ? syllabus.modules.find((m) =>
+            m.lessonGroups.some((g) => g.items.some((item) => item.id === activeItemId)),
+          ) ?? syllabus.modules[0]
+        : syllabus.modules[0];
+      if (!module) return;
+
+      // Complete all uncompleted items in this module and award XP
+      const moduleItems = module.lessonGroups.flatMap((g) => g.items);
+      setCompletedItemIds((prev) => {
+        const next = new Set(prev);
+        let addedXp = 0;
+        let addedPractice = 0;
+        const aggregatedSkillXp: Record<string, number> = {};
+
+        for (const item of moduleItems) {
+          if (!next.has(item.id)) {
+            next.add(item.id);
+            addedXp += item.xpValue;
+            if (item.type === "practice" || item.type === "graded") {
+              addedPractice++;
+            }
+            // Distribute XP to skills
+            const xpMap = distributeXpToSkills(item.xpValue, syllabus.targetSkillIds);
+            for (const [skillId, xp] of Object.entries(xpMap)) {
+              aggregatedSkillXp[skillId] = (aggregatedSkillXp[skillId] ?? 0) + xp;
+            }
+          }
+        }
+
+        // Batch award all XP at once
+        if (Object.keys(aggregatedSkillXp).length > 0) {
+          onXpEarned(aggregatedSkillXp);
+        }
+        if (addedXp > 0) {
+          setSessionXp((prev) => prev + addedXp);
+        }
+        if (addedPractice > 0) {
+          setPracticeCompleted((prev) => prev + addedPractice);
+        }
+
+        return next;
+      });
+
+      // Advance active item to the first item in the next module
+      const moduleIdx = syllabus.modules.indexOf(module);
+      const nextModule = syllabus.modules[moduleIdx + 1];
+      if (nextModule) {
+        const firstNextItem = nextModule.lessonGroups[0]?.items[0];
+        if (firstNextItem) setActiveItemId(firstNextItem.id);
+      }
+
+      setModalState({ type: "module-complete", module });
+    });
+  }, [onRegisterTriggerModuleComplete, activeItemId, syllabus, onXpEarned]);
 
   const findNextItem = useCallback(
     (currentId: string): LexItem | null => {
@@ -184,7 +246,12 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, itemsComplet
       {modalState.type === "module-complete" && (
         <LexModuleCompleteModal
           module={modalState.module}
+          roleProgress={roleProgress}
+          targetSkillIds={syllabus.targetSkillIds}
           onContinue={handleModuleCompleteContinue}
+          onSeeProgress={() => {
+            setModalState({ type: "skill-progress" });
+          }}
         />
       )}
       {modalState.type === "skill-progress" && (

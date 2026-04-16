@@ -130,6 +130,7 @@ export function AppShell() {
   const [activeLexCourse, setActiveLexCourse] = useState<PlanCourse | null>(null);
   const [planStarted, setPlanStarted] = useState(false);
   const [lexItemsCompleted, setLexItemsCompleted] = useState(0);
+  const lexTriggerModuleComplete = useRef<(() => void) | null>(null);
 
   const setPlan = setPlanState;
 
@@ -592,6 +593,10 @@ export function AppShell() {
     setPhase("role_mastery");
   }, [roleProgress, setPhase]);
 
+  const handleProtoTriggerModuleComplete = useCallback(() => {
+    lexTriggerModuleComplete.current?.();
+  }, []);
+
   const handleProtoJumpToRole = useCallback((roleId: string) => {
     const role = findRoleById(roleId);
     if (!role) return;
@@ -683,6 +688,7 @@ export function AppShell() {
           onXpEarned={handleLexXpEarned}
           onExit={handleExitLex}
           itemsCompleted={lexItemsCompleted}
+          onRegisterTriggerModuleComplete={(trigger) => { lexTriggerModuleComplete.current = trigger; }}
         />
       ) : phase === "entry" ? (
         <EntryScreen onSend={handleSend} />
@@ -744,7 +750,9 @@ export function AppShell() {
         onSetRandomProgress={handleProtoSetRandomProgress}
         onResetProgress={handleProtoResetProgress}
         onTriggerMastery={handleProtoTriggerMastery}
+        onTriggerModuleComplete={handleProtoTriggerModuleComplete}
         onJumpToRole={handleProtoJumpToRole}
+        isInLex={phase === "learning" && !!activeLexCourse}
       />
     </div>
   );
