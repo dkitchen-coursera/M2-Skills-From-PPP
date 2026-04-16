@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
 import type { LearningPlan, PlanCourse } from "@/lib/plan-types";
+import type { RoleProgress, GapAnalysis } from "@/lib/skills-store";
 
 export type Persona = "default" | "skipped" | "onboarded" | "in-progress" | "in-progress-skipped";
 
@@ -12,7 +13,8 @@ export type AppPhase =
   | "ready_for_plan"
   | "plan_generating"
   | "plan_generated"
-  | "viewing_plan";
+  | "viewing_plan"
+  | "role_mastery";
 
 export type GatheredInfo = {
   goal: string | null;
@@ -39,6 +41,13 @@ export type DebugLogEntry = {
   ts: string;
 };
 
+/** Role identification result from the AI during onboarding. */
+export type RoleIdentificationData = {
+  roleId: string;
+  roleTitle: string;
+  gapAnalysis: GapAnalysis;
+};
+
 export type ChatUIMessage = UIMessage<
   never,
   {
@@ -47,6 +56,8 @@ export type ChatUIMessage = UIMessage<
     "learning-plan": LearningPlan;
     "plan-updated": { message: string };
     "course-swap": { milestoneId: string; oldCourseId: string; newCourse: PlanCourse };
+    "role-identified": RoleIdentificationData;
+    "skill-xp-update": { skillId: string; xpEarned: number; newTotal: number };
     "debug-log": DebugLogEntry;
   }
 >;

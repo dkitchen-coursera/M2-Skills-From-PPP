@@ -6,39 +6,35 @@ import { Header } from "@/components/shared/header";
 import { PromptPillRow } from "@/components/entry/prompt-pill-row";
 
 const ROW_1_PILLS = [
-  "I want to switch careers into technology",
-  "Figma for UI/UX designers",
-  "Project Management for managers",
-  "Coding practice for beginners",
-  "I want to switch careers into technology",
-  "Figma for UI/UX designers",
-  "Project Management for managers",
+  "I want to become a Data Analyst",
+  "I want to become a UX Designer",
+  "I want to become a Project Manager",
+  "I want to become a Digital Marketing Specialist",
+  "I want to become a Data Analyst",
+  "I want to become a UX Designer",
+  "I want to become a Project Manager",
 ];
 
 const ROW_2_PILLS = [
-  "AI tools",
-  "Public speaking for leaders",
-  "AWS for cloud architects",
-  "SQL for data analysts",
-  "Coding for designers",
-  "AI tools",
-  "Public speaking for leaders",
-  "AWS for cloud architects",
-  "SQL for data analysts",
-  "Coding for designers",
+  "I want to learn SQL and data visualization",
+  "I want to learn SEO and content strategy",
+  "I want to learn user research and prototyping",
+  "I want to learn agile and stakeholder communication",
+  "I want to learn SQL and data visualization",
+  "I want to learn SEO and content strategy",
+  "I want to learn user research and prototyping",
+  "I want to learn agile and stakeholder communication",
 ];
 
 const ROW_3_PILLS = [
-  "Language learning for fun",
-  "Prompting for designers",
-  "Python for building apps",
-  "Start my career as an engineer",
-  "Help me decide",
-  "Language learning for fun",
-  "Prompting for designers",
-  "Python for building apps",
-  "Start my career as an engineer",
-  "Help me decide",
+  "I know what skills I want to work on",
+  "Help me figure out my career path",
+  "I want to switch from marketing to data",
+  "I'm a beginner — where do I start?",
+  "I know what skills I want to work on",
+  "Help me figure out my career path",
+  "I want to switch from marketing to data",
+  "I'm a beginner — where do I start?",
 ];
 
 interface EntryScreenProps {
@@ -65,10 +61,10 @@ export function EntryScreen({ onSend, onExit }: EntryScreenProps) {
           {/* Greeting */}
           <div className="text-center">
             <h1 className="text-2xl font-semibold leading-7 tracking-tight text-[#0f1114]">
-              Hello! I can recommend courses that fit your goals.
+              Hello! I can help you master the skills for your dream role.
             </h1>
             <p className="mt-1 text-2xl font-semibold leading-7 tracking-tight text-[#0f1114]">
-              What do you want to learn and for what role?
+              What role are you aiming for, or what skills do you want to build?
             </p>
           </div>
 

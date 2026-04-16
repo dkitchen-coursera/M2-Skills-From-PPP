@@ -302,6 +302,17 @@ function MilestoneCard({
               {milestone.description || milestone.skills.join(", ")}
             </p>
           )}
+          {/* Target skills */}
+          {milestone.targetSkills.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {milestone.targetSkills.map((ts) => (
+                <span key={ts.skillId} className="inline-flex items-center gap-1 rounded-full bg-[#f2f5fa] px-2 py-0.5">
+                  <span className="text-[10px] font-medium text-[#404b61]">{ts.skillName}</span>
+                  <span className="text-[10px] text-[#5b6780]">+{ts.xpTarget} XP</span>
+                </span>
+              ))}
+            </div>
+          )}
           {/* Partner logos + course count (collapsed only) */}
           {!expanded && (
             <div className="flex items-center gap-2">

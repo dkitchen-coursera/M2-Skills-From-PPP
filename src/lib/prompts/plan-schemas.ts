@@ -12,11 +12,19 @@ export const buildPlanInputSchema = z.object({
   hoursPerWeek: z
     .string()
     .describe("Learner's weekly commitment, e.g. '~6 hours/week'"),
+  skillBreakdown: z
+    .object({
+      should: z.array(z.string()).describe("Skill names the learner should master"),
+      might: z.array(z.string()).describe("Skill names the learner might need to deepen"),
+      optional: z.array(z.string()).describe("Optionally beneficial skill names"),
+    })
+    .optional()
+    .describe("Skill gap categorization based on current vs. desired role"),
   milestones: z.array(
     z.object({
       name: z
         .string()
-        .describe("Milestone name in format 'Phase N: Name (duration)', e.g. 'Phase 1: Foundations (1-3 months)'"),
+        .describe("Milestone name in format 'Phase N: Master [Skill X, Y] (duration)', e.g. 'Phase 1: Master Data Integrity & Analysis (1-3 months)'"),
       description: z
         .string()
         .describe("Milestone description in format 'Goal: skill1, skill2, skill3'"),
@@ -37,6 +45,17 @@ export const buildPlanInputSchema = z.object({
         .describe(
           "Course IDs from search results to include in this milestone"
         ),
+      targetSkills: z
+        .array(
+          z.object({
+            skillId: z.string().describe("Skill area ID from the role catalog"),
+            skillName: z.string().describe("Skill area display name"),
+            xpTarget: z.number().describe("XP this milestone contributes to this skill (e.g. 375, 500, 750)"),
+            priority: z.enum(["should", "might", "optional"]).describe("Skill priority category"),
+          })
+        )
+        .default([])
+        .describe("Target skills this milestone helps master, with XP targets"),
     })
   ),
 });

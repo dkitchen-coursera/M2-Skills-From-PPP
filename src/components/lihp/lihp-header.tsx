@@ -21,13 +21,22 @@ function BellIcon({ className }: { className?: string }) {
   );
 }
 
-export function LihpHeader() {
+interface LihpHeaderProps {
+  /** Which nav item is active */
+  activePage?: "home" | "my-learning";
+  /** Navigate to a page */
+  onNavigate?: (page: "home" | "my-learning") => void;
+}
+
+export function LihpHeader({ activePage = "home", onNavigate }: LihpHeaderProps) {
   return (
     <header className="w-full border-b border-[#dae1ed] bg-white px-8 py-[10px]">
       <div className="flex items-center justify-between">
         {/* Left: Logo + Nav + Search — centered within max-width */}
         <div className="flex flex-1 items-center gap-6">
-          <CourseraLogo className="h-5 shrink-0" />
+          <button onClick={() => onNavigate?.("home")} className="shrink-0 cursor-pointer">
+            <CourseraLogo className="h-5" />
+          </button>
 
           <nav className="flex shrink-0 items-center gap-4 text-sm text-[#5b6780]">
             <button className="flex items-center gap-0.5 hover:text-[#0056d2]">
@@ -36,7 +45,12 @@ export function LihpHeader() {
                 <path d="M4.5 6L8 9.5 11.5 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <span className="cursor-pointer hover:text-[#0056d2]">Degrees</span>
+            <button
+              onClick={() => onNavigate?.("my-learning")}
+              className={activePage === "my-learning" ? "font-semibold text-[#0056d2]" : "cursor-pointer hover:text-[#0056d2]"}
+            >
+              My Learning
+            </button>
           </nav>
 
           <div className="relative flex w-[625px] items-center rounded-full border border-[#dae1ed] bg-white py-1 pl-4 pr-1">

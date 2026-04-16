@@ -57,11 +57,14 @@ export function PlanCourseCard({ course, isFirstCourse }: PlanCourseCardProps) {
               {" \u00b7 "}
               {course.duration}
             </p>
-            {productLabel && (
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                <ActivityBadge label={productLabel} />
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+              {productLabel && <ActivityBadge label={productLabel} />}
+              {course.xpValue > 0 && (
+                <span className="inline-flex items-center rounded-full bg-[var(--cds-color-purple-50)] px-2 py-0.5 text-xs font-medium text-[var(--cds-color-purple-700)]">
+                  +{course.xpValue} XP
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Start card for first course — matches Figma preview style */}

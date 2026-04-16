@@ -3,6 +3,7 @@
 import type { ChatStatus } from "ai";
 import type { AppPhase, ChatUIMessage, GatheredInfo, Persona, StructuredPillData } from "@/lib/types";
 import type { LearningPlan } from "@/lib/plan-types";
+import type { RoleProgress } from "@/lib/skills-store";
 import clsx from "clsx";
 import { LihpHeader } from "@/components/lihp/lihp-header";
 import { ProgressivePlanModule } from "@/components/lihp/progressive-plan-module";
@@ -14,6 +15,7 @@ import { SkillsSection } from "@/components/lihp/skills-section";
 import { CollectionSection } from "@/components/lihp/collection-section";
 import { PathwaysCollectionSection } from "@/components/lihp/pathways-collection-section";
 import { ChatSidePanel } from "@/components/lihp/chat-side-panel";
+import { SkillProgressPanel } from "@/components/skills/skill-progress-panel";
 
 interface LihpPageProps {
   messages: ChatUIMessage[];
@@ -38,6 +40,7 @@ interface LihpPageProps {
   swapDisabled?: boolean;
   onRemoveCourse: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreAlternatives: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
+  roleProgress?: RoleProgress | null;
 }
 
 export function LihpPage({
@@ -63,6 +66,7 @@ export function LihpPage({
   swapDisabled,
   onRemoveCourse,
   onExploreAlternatives,
+  roleProgress,
 }: LihpPageProps) {
   const chatPanelOpen = phase !== "browsing";
 
@@ -88,6 +92,11 @@ export function LihpPage({
                     onOpenChat={onOpenChat}
                     onSend={onSendFromBanner}
                   />
+                )}
+
+                {/* Skill progress panel — visible when role is identified */}
+                {roleProgress && (
+                  <SkillProgressPanel progress={roleProgress} />
                 )}
 
                 {/* Progressive plan module — visible once chat is open */}

@@ -13,6 +13,15 @@ export const planCourseSchema = z.object({
   productDifficultyLevel: z.string(),
   estimatedHours: z.number().default(0),
   activityBadges: z.array(z.string()).default([]),
+  xpValue: z.number().default(0),
+  targetSkillIds: z.array(z.string()).default([]),
+});
+
+export const milestoneTargetSkillSchema = z.object({
+  skillId: z.string(),
+  skillName: z.string(),
+  xpTarget: z.number(),
+  priority: z.enum(["should", "might", "optional"]),
 });
 
 export const planMilestoneSchema = z.object({
@@ -23,6 +32,13 @@ export const planMilestoneSchema = z.object({
   badges: z.array(z.string()).default([]),
   courses: z.array(planCourseSchema),
   estimatedWeeks: z.number().default(0),
+  targetSkills: z.array(milestoneTargetSkillSchema).default([]),
+});
+
+export const skillBreakdownSchema = z.object({
+  should: z.array(z.string()),
+  might: z.array(z.string()),
+  optional: z.array(z.string()),
 });
 
 export const learningPlanSchema = z.object({
@@ -32,10 +48,13 @@ export const learningPlanSchema = z.object({
     skills: z.array(z.string()),
     totalDuration: z.string(),
     hoursPerWeek: z.string(),
+    skillBreakdown: skillBreakdownSchema.optional(),
   }),
   milestones: z.array(planMilestoneSchema),
 });
 
 export type PlanCourse = z.infer<typeof planCourseSchema>;
+export type MilestoneTargetSkill = z.infer<typeof milestoneTargetSkillSchema>;
 export type PlanMilestone = z.infer<typeof planMilestoneSchema>;
+export type SkillBreakdown = z.infer<typeof skillBreakdownSchema>;
 export type LearningPlan = z.infer<typeof learningPlanSchema>;

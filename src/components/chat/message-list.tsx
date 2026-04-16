@@ -175,7 +175,7 @@ export function MessageList({
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3">
           <p className="text-sm text-red-800">
-            Something went wrong. Please try again.
+            {error.message || "Something went wrong. Please try again."}
           </p>
           {onRetry && (
             <button

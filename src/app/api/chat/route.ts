@@ -10,11 +10,13 @@ import {
 } from "ai";
 import { z } from "zod";
 import { getConfig } from "@/lib/config";
+import { getMockResponse, streamMockResponse } from "@/lib/mock-chat-flow";
 import { getModel } from "@/lib/models";
 import { getSystemPrompt } from "@/lib/prompts/get-system-prompt";
 import { conversationStateSchema } from "@/lib/prompts/schemas";
 import { buildPlanInputSchema } from "@/lib/prompts/plan-schemas";
 import { searchCoursesTool } from "@/lib/tools/search-courses";
+import { identifyRoleTool } from "@/lib/tools/identify-role";
 import {
   learningPlanSchema,
   type LearningPlan,
@@ -64,6 +66,8 @@ function courseHitToPlanCourse(hit: CourseHit): PlanCourse {
     productDifficultyLevel: hit.productDifficultyLevel,
     estimatedHours: 0,
     activityBadges: hit.activityBadges,
+    xpValue: 0,
+    targetSkillIds: [],
   };
 }
 
@@ -85,8 +89,41 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Mock mode handler — returns scripted responses when no API key is configured.
+ * Simulates the full skills conversation flow with realistic streaming.
+ */
+async function handleMockMode(req: Request): Promise<Response> {
+  const { messages }: { messages: ChatUIMessage[] } = await req.json();
+  console.log("[chat/route] MOCK MODE — no API key, using scripted responses");
+
+  const lastUserMsg = messages.findLast((m: ChatUIMessage) => m.role === "user");
+  const lastUserText = lastUserMsg?.parts?.find((p: { type: string }) => p.type === "text");
+  const userText = lastUserText && "text" in lastUserText ? (lastUserText as { text: string }).text : "Hi";
+
+  const userMessageCount = messages.filter((m: ChatUIMessage) => m.role === "user").length;
+  const mockResponse = getMockResponse(userText, userMessageCount);
+
+  const stream = createUIMessageStream({
+    execute: async ({ writer }) => {
+      await streamMockResponse(
+        writer as unknown as { write: (part: Record<string, unknown>) => void },
+        mockResponse,
+      );
+    },
+  });
+
+  return createUIMessageStreamResponse({ stream });
+}
+
 export async function POST(req: Request) {
-  const config = getConfig();
+  let config;
+  try {
+    config = getConfig();
+  } catch {
+    // No API key — fall back to mock mode
+    return handleMockMode(req);
+  }
   const url = new URL(req.url);
   const promptVariant = url.searchParams.get("prompt") ?? "default";
   const promptGoal = url.searchParams.get("goal") ?? undefined;
@@ -313,6 +350,7 @@ export async function POST(req: Request) {
               badges: milestone.badges,
               courses,
               estimatedWeeks: milestone.estimatedWeeks,
+              targetSkills: milestone.targetSkills ?? [],
             };
           });
 
@@ -323,6 +361,7 @@ export async function POST(req: Request) {
               skills: input.skills,
               totalDuration: input.totalDuration,
               hoursPerWeek: input.hoursPerWeek,
+              skillBreakdown: input.skillBreakdown,
             },
             milestones,
           };
@@ -422,6 +461,32 @@ export async function POST(req: Request) {
         },
       });
 
+      // Wrapper around identifyRoleTool that emits role-identified data part
+      const identifyRoleWithEmit = tool({
+        description: identifyRoleTool.description ?? "",
+        inputSchema: identifyRoleTool.inputSchema,
+        execute: async (input) => {
+          debugLog("identify-role", { roleId: input.roleId, should: input.shouldSkills, might: input.mightSkills, optional: input.optionalSkills });
+          const result = await identifyRoleTool.execute!(input, {
+            toolCallId: "",
+            messages: modelMessages,
+            abortSignal: new AbortController().signal,
+          });
+          const typedResult = result as { success: boolean; roleId?: string; roleTitle?: string; gapAnalysis?: { should: string[]; might: string[]; optional: string[] } };
+          if (typedResult.success && typedResult.roleId && typedResult.gapAnalysis) {
+            writer.write({
+              type: "data-role-identified",
+              data: {
+                roleId: typedResult.roleId,
+                roleTitle: typedResult.roleTitle ?? "",
+                gapAnalysis: typedResult.gapAnalysis,
+              },
+            });
+          }
+          return result;
+        },
+      });
+
       // Retry loop for transient LLM failures
       let lastError: unknown;
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -437,6 +502,7 @@ export async function POST(req: Request) {
             messages: modelMessages,
             tools: {
               report_conversation_state: reportConversationState,
+              identify_role: identifyRoleWithEmit,
               search_courses: searchCoursesWithCache,
               build_learning_plan: buildLearningPlanTool,
               swap_course: swapCourseTool,
@@ -465,8 +531,8 @@ export async function POST(req: Request) {
                 };
               }
 
-              // Conversation phase: allow report_conversation_state on step 0,
-              // then cut off tools so the model finishes and the stream ends.
+              // Conversation phase: allow report_conversation_state and identify_role
+              // in the same step, then cut off tools so the model finishes.
               const alreadyReported = steps.some((step) =>
                 step.toolResults.some((tr) => tr.toolName === "report_conversation_state")
               );
@@ -475,7 +541,7 @@ export async function POST(req: Request) {
               }
 
               return {
-                activeTools: ["report_conversation_state"] as const,
+                activeTools: ["report_conversation_state", "identify_role"] as const,
               };
             },
 

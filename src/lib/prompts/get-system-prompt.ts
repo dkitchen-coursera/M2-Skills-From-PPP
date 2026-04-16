@@ -2,6 +2,7 @@ import { buildSystemPrompt as buildDefault } from "./default";
 import { buildSystemPromptExperimental as buildExperimental } from "./experimental";
 import { buildSystemPromptExperimentalV2 as buildExperimentalV2 } from "./experimental-v2";
 import { buildSystemPromptOnboarded as buildOnboarded } from "./onboarded";
+import { buildSkillsSystemPrompt as buildSkills } from "./skills";
 
 /**
  * Registry of prompt builders keyed by URL param value.
@@ -12,7 +13,9 @@ import { buildSystemPromptOnboarded as buildOnboarded } from "./onboarded";
  * via the options parameter passed through from getSystemPrompt.
  */
 const promptRegistry: Record<string, (options?: PromptOptions) => string> = {
-  default: () => buildDefault(),
+  default: () => buildSkills(),
+  skills: () => buildSkills(),
+  legacy: () => buildDefault(),
   experimental: () => buildExperimental(),
   "experimental-v2": () => buildExperimentalV2(),
   onboarded: (opts) => buildOnboarded(opts?.goal, opts?.skills),

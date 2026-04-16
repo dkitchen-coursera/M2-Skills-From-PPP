@@ -4,7 +4,6 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import clsx from "clsx";
 import type {
   AppPhase,
   GatheredInfo,
@@ -13,14 +12,28 @@ import type {
   ConversationStateData,
   StructuredPillData,
   DebugLogEntry,
+  RoleIdentificationData,
 } from "@/lib/types";
 import { ONBOARDED_GATHERED_INFO, IN_PROGRESS_GATHERED_INFO } from "@/lib/mock-persona-data";
 import type { LearningPlan, PlanCourse } from "@/lib/plan-types";
 import { conversationStateSchema } from "@/lib/prompts/schemas";
+import { findRoleById } from "@/lib/role-catalog";
+import {
+  createInitialProgress,
+  type RoleProgress,
+  type GapAnalysis,
+} from "@/lib/skills-store";
 import { EntryScreen } from "@/components/entry/entry-screen";
-import { LihpPage } from "@/components/lihp/lihp-page";
+import { Homepage } from "@/components/home/homepage";
+import { MyLearningPage } from "@/components/my-learning/my-learning-page";
 import { LihpLoadingScreen } from "@/components/lihp/lihp-loading-screen";
 import { FullScreenChat } from "@/components/chat/full-screen-chat";
+import { ProtoToolsPanel } from "@/components/proto/proto-tools-panel";
+import {
+  setAllMastered,
+  setRandomProgress,
+  resetProgress,
+} from "@/lib/skills-store";
 
 const metadataJsonRegex = /```json\s*(\{[\s\S]*?\})\s*```\s*$/;
 
@@ -111,7 +124,7 @@ export function AppShell() {
   // Tracks the latest update type so the useEffect can compute the message index after render
   const [pendingIndicatorType, setPendingIndicatorType] = useState<"created" | "rebuilt" | "swapped" | null>(null);
   const messagesLengthRef = useRef(0); // tracks current messages length for onData
-  const [viewingPlan, setViewingPlan] = useState(false);
+  const [roleProgress, setRoleProgress] = useState<RoleProgress | null>(null);
 
   const setPlan = setPlanState;
 
@@ -268,6 +281,15 @@ export function AppShell() {
           setPendingRemovals(new Set());
           setIsRefining(false);
         }
+        if (dataPart.type === "data-role-identified") {
+          const roleData = dataPart.data as RoleIdentificationData;
+          console.log("[AppShell] Role identified:", roleData.roleId, roleData.gapAnalysis);
+          const role = findRoleById(roleData.roleId);
+          if (role) {
+            const progress = createInitialProgress(role, roleData.gapAnalysis);
+            setRoleProgress(progress);
+          }
+        }
       } catch (err) {
         console.error("[AppShell] Error handling data part:", dataPart.type, err);
         // Always clear loading states so the UI doesn't get stuck
@@ -325,16 +347,6 @@ export function AppShell() {
       }
     }
   }, [messages, status, mergeGatheredInfo, setPhase]);
-
-  const handleViewPlan = useCallback(() => {
-    setViewingPlan(true);
-    setPhase("viewing_plan");
-  }, []);
-
-  const handleBackToHome = useCallback(() => {
-    setViewingPlan(false);
-    setPhase("plan_generated");
-  }, []);
 
   // Start the minimum loading timer when phase enters "loading"
   useEffect(() => {
@@ -520,35 +532,113 @@ export function AppShell() {
     }
   }, [messages, sendMessage]);
 
-  // Open full-screen chat from a persona banner CTA click (generic greeting)
-  const handleOpenChat = useCallback(() => {
+  // Role mastery: explore next role — restart the chat flow
+  const handleExploreNextRole = useCallback(() => {
+    setRoleProgress(null);
+    setPlan(null);
+    planTriggerSent.current = false;
+    planCountRef.current = 0;
     setPhase("full_screen_chat");
-    sendMessage({ text: "Hi" });
-  }, [sendMessage, setPhase]);
+    sendMessage({ text: "Hi, I'd like to explore a new role goal." });
+  }, [sendMessage, setPhase, setPlan]);
 
-  // Open full-screen chat from a pill click (prefilled message)
-  const handleSendFromBanner = useCallback((text: string) => {
+  // Proto tools handlers
+  const handleProtoSetAllMastered = useCallback(() => {
+    if (!roleProgress) return;
+    setRoleProgress(setAllMastered(roleProgress));
+  }, [roleProgress]);
+
+  const handleProtoSetRandomProgress = useCallback(() => {
+    if (!roleProgress) return;
+    setRoleProgress(setRandomProgress(roleProgress));
+  }, [roleProgress]);
+
+  const handleProtoResetProgress = useCallback(() => {
+    if (!roleProgress) return;
+    setRoleProgress(resetProgress(roleProgress));
+  }, [roleProgress]);
+
+  const handleProtoTriggerMastery = useCallback(() => {
+    if (!roleProgress) return;
+    setRoleProgress(setAllMastered(roleProgress));
+    setPhase("role_mastery");
+  }, [roleProgress, setPhase]);
+
+  const handleProtoJumpToRole = useCallback((roleId: string) => {
+    const role = findRoleById(roleId);
+    if (!role) return;
+    // Split skills by level: L1 skills are "should", first few L2 are "might", rest "optional"
+    const l1Skills = role.skills.filter((s) => s.level.includes("1") || s.level.includes("Foundations"));
+    const l2Skills = role.skills.filter((s) => s.level.includes("2") || s.level.includes("Advanced"));
+    const gapAnalysis: GapAnalysis = {
+      should: l1Skills.map((s) => s.id),
+      might: l2Skills.slice(0, 3).map((s) => s.id),
+      optional: l2Skills.slice(3).map((s) => s.id),
+    };
+    const progress = createInitialProgress(role, gapAnalysis);
+    setRoleProgress(progress);
+    // Reset plan so a new one can be generated
+    setPlan(null);
+    planTriggerSent.current = false;
+    planCountRef.current = 0;
+    // Update gathered info to reflect the role
+    setGatheredInfo({
+      goal: role.title,
+      skills: role.skills.map((s) => s.name).join(", "),
+      background: null,
+      constraints: null,
+    });
     setPhase("full_screen_chat");
-    sendMessage({ text });
-  }, [sendMessage, setPhase]);
+    sendMessage({ text: `I want to become a ${role.title}` });
+  }, [sendMessage, setPhase, setPlan]);
 
-  // Exit button on entry screen — full page reload with skipped persona
-  const handleExit = useCallback(() => {
-    window.location.href = "/?persona=skipped";
-  }, []);
+  // Navigate to My Learning page (from homepage or header)
+  const handleNavigateMyLearning = useCallback(() => {
+    // If we have a plan, go to plan_generated to show My Learning with plan
+    // Otherwise go to chatting/browsing
+    if (plan) {
+      setPhase("plan_generated");
+    } else {
+      setPhase("browsing");
+    }
+  }, [plan, setPhase]);
 
-  // Exit button on full-screen chat — return to LIHP browsing
-  const handleExitFullScreenChat = useCallback(() => {
+  // Navigate to Homepage (from My Learning header logo click)
+  const handleNavigateHome = useCallback(() => {
     setPhase("browsing");
   }, [setPhase]);
 
+  // Start chat from homepage hero CTA
+  const handleStartChat = useCallback((message?: string) => {
+    setPhase("full_screen_chat");
+    if (message) {
+      sendMessage({ text: message });
+    }
+  }, [sendMessage, setPhase]);
+
+  // Exit button on full-screen chat — return to appropriate page
+  const handleExitFullScreenChat = useCallback(() => {
+    if (plan) {
+      setPhase("plan_generated");
+    } else {
+      setPhase("entry");
+    }
+  }, [setPhase, plan]);
+
+  // Get role demand label for homepage hero
+  const roleForHomepage = roleProgress
+    ? findRoleById(roleProgress.roleId)
+    : null;
+
+  // Determine if we should show My Learning page (post-onboarding phases)
+  const showMyLearning = phase === "plan_generated" || phase === "plan_generating"
+    || phase === "viewing_plan" || phase === "chatting"
+    || phase === "role_mastery"
+    || (phase === "browsing" && plan);
+
   return (
     <div
-      className={clsx(
-        "h-screen transition-all duration-500 ease-out",
-        phase === "entry" && "flex items-center justify-center",
-        phase !== "entry" && "flex flex-col",
-      )}
+      className="h-screen flex flex-col transition-all duration-500 ease-out"
     >
       {(isNonDefault || modelParam) && (
         <div className="bg-red-600 text-white text-center text-xs py-1 px-2 shrink-0">
@@ -559,7 +649,7 @@ export function AppShell() {
         </div>
       )}
       {phase === "entry" ? (
-        <EntryScreen onSend={handleSend} onExit={handleExit} />
+        <EntryScreen onSend={handleSend} />
       ) : phase === "loading" ? (
         <LihpLoadingScreen />
       ) : phase === "full_screen_chat" ? (
@@ -576,8 +666,8 @@ export function AppShell() {
           onRetry={handleRetry}
           onExit={handleExitFullScreenChat}
         />
-      ) : (
-        <LihpPage
+      ) : showMyLearning ? (
+        <MyLearningPage
           messages={messages as ChatUIMessage[]}
           status={status}
           error={error}
@@ -585,23 +675,38 @@ export function AppShell() {
           gatheredInfo={gatheredInfo}
           plan={plan}
           phase={phase}
-          persona={persona}
-          viewingPlan={viewingPlan}
-          onViewPlan={handleViewPlan}
-          onBackToHome={handleBackToHome}
-          onSend={handleSend}
-          onRetry={handleRetry}
-          onOpenChat={handleOpenChat}
-          onSendFromBanner={handleSendFromBanner}
-          pendingRemovals={pendingRemovals}
           isRefining={isRefining}
           planIndicators={planIndicators}
           stripQuestions={stripQuestions}
+          pendingRemovals={pendingRemovals}
           swapDisabled={swapDisabled}
+          roleProgress={roleProgress}
+          onSend={handleSend}
+          onRetry={handleRetry}
           onRemoveCourse={handleRemoveCourse}
           onExploreAlternatives={handleExploreAlternatives}
+          onNavigateHome={handleNavigateHome}
+          onExploreNextRole={handleExploreNextRole}
+        />
+      ) : (
+        /* Homepage — shown after onboarding when clicking logo */
+        <Homepage
+          learnerName="there"
+          roleTitle={roleProgress?.roleTitle ?? gatheredInfo.goal ?? undefined}
+          demandLabel={roleForHomepage?.demandLabel}
+          roleProgress={roleProgress}
+          onStartChat={handleStartChat}
+          onNavigateMyLearning={handleNavigateMyLearning}
         />
       )}
+      <ProtoToolsPanel
+        roleProgress={roleProgress}
+        onSetAllMastered={handleProtoSetAllMastered}
+        onSetRandomProgress={handleProtoSetRandomProgress}
+        onResetProgress={handleProtoResetProgress}
+        onTriggerMastery={handleProtoTriggerMastery}
+        onJumpToRole={handleProtoJumpToRole}
+      />
     </div>
   );
 }

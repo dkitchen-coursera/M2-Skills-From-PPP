@@ -8,6 +8,8 @@ interface MilestoneSectionProps {
 }
 
 export function MilestoneSection({ milestone, isFirstMilestone }: MilestoneSectionProps) {
+  const hasTargetSkills = milestone.targetSkills.length > 0;
+
   return (
     <div className="rounded-lg border border-[#dae1ed] overflow-hidden">
       <div className="px-4 py-3 space-y-1">
@@ -31,11 +33,22 @@ export function MilestoneSection({ milestone, isFirstMilestone }: MilestoneSecti
           </div>
         </div>
         <p className="text-xs text-[#5b6780]">{milestone.description}</p>
-        {milestone.skills.length > 0 && (
+        {hasTargetSkills ? (
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            {milestone.targetSkills.map((ts) => (
+              <span key={ts.skillId} className="inline-flex items-center gap-1 rounded-full bg-[#f2f5fa] px-2 py-0.5">
+                <span className="text-xs font-medium text-[#404b61]">
+                  {ts.skillName}
+                </span>
+                <span className="text-[10px] text-[#5b6780]">+{ts.xpTarget} XP</span>
+              </span>
+            ))}
+          </div>
+        ) : milestone.skills.length > 0 ? (
           <p className="text-xs text-[#5b6780]">
             Skills: {milestone.skills.slice(0, 3).join(", ")}
           </p>
-        )}
+        ) : null}
       </div>
       <div className="divide-y divide-[#dae1ed] border-t border-[#dae1ed]">
         {milestone.courses.map((course, idx) => (
