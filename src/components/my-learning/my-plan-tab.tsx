@@ -16,6 +16,8 @@ interface MyPlanTabProps {
   onRemoveCourse: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreAlternatives: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreNextRole?: () => void;
+  onStartPlan?: () => void;
+  planStarted?: boolean;
 }
 
 function CompletedMilestone({ name, description }: { name: string; description: string }) {
@@ -41,6 +43,8 @@ export function MyPlanTab({
   onRemoveCourse,
   onExploreAlternatives,
   onExploreNextRole,
+  onStartPlan,
+  planStarted,
 }: MyPlanTabProps) {
   if (roleProgress?.isMastered && plan) {
     return (
@@ -108,6 +112,8 @@ export function MyPlanTab({
         swapDisabled={swapDisabled}
         onRemoveCourse={onRemoveCourse}
         onExploreAlternatives={onExploreAlternatives}
+        onStartPlan={onStartPlan}
+        planStarted={planStarted}
       />
 
       {/* Empty state when no plan and not generating */}

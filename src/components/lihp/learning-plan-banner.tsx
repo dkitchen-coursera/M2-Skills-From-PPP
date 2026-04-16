@@ -14,6 +14,8 @@ interface LearningPlanBannerProps {
   isRefining?: boolean;
   onRemoveCourse?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreAlternatives?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
+  onStartPlan?: () => void;
+  planStarted?: boolean;
 }
 
 function AssignmentCompleteIcon() {
@@ -352,7 +354,7 @@ function MilestoneCard({
   );
 }
 
-export function LearningPlanBanner({ plan, onViewPlan, pendingRemovals, swapDisabled, isRefining, onRemoveCourse, onExploreAlternatives }: LearningPlanBannerProps) {
+export function LearningPlanBanner({ plan, onViewPlan, pendingRemovals, swapDisabled, isRefining, onRemoveCourse, onExploreAlternatives, onStartPlan, planStarted }: LearningPlanBannerProps) {
   return (
     <div
       className="rounded-2xl border border-[#dae1ed] bg-[#f0f6ff] p-5"
@@ -383,10 +385,10 @@ export function LearningPlanBanner({ plan, onViewPlan, pendingRemovals, swapDisa
           </div>
         </div>
         <button
-          onClick={onViewPlan}
+          onClick={() => onStartPlan?.()}
           className="shrink-0 rounded-md bg-[#0056d2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0048b0] transition-colors"
         >
-          Start learning plan
+          {planStarted ? "Continue learning plan" : "Start learning plan"}
         </button>
       </div>
 
