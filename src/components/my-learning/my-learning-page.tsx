@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { ChatStatus } from "ai";
 import type { AppPhase, ChatUIMessage, GatheredInfo, StructuredPillData } from "@/lib/types";
-import type { LearningPlan } from "@/lib/plan-types";
+import type { LearningPlan, PlanCourse } from "@/lib/plan-types";
 import type { RoleProgress } from "@/lib/skills-store";
 import { LihpHeader } from "@/components/lihp/lihp-header";
 import { ChatSidePanel } from "@/components/lihp/chat-side-panel";
@@ -35,6 +35,9 @@ interface MyLearningPageProps {
   onExploreAlternatives: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onNavigateHome?: () => void;
   onExploreNextRole?: () => void;
+  onResumeCourse?: (course: PlanCourse) => void;
+  onStartPlan?: () => void;
+  planStarted?: boolean;
 }
 
 // ── Tab definitions ────────────────────────────────────────────────────────
@@ -80,6 +83,9 @@ export function MyLearningPage({
   onExploreAlternatives,
   onNavigateHome,
   onExploreNextRole,
+  onResumeCourse,
+  onStartPlan,
+  planStarted,
 }: MyLearningPageProps) {
   const [activeTab, setActiveTab] = useState<TabId>("my-plan");
   const tabRefs = useRef<Map<TabId, HTMLButtonElement>>(new Map());
@@ -184,7 +190,7 @@ export function MyLearningPage({
 
             {/* Tab content */}
             {activeTab === "in-progress" && (
-              <InProgressTab plan={plan} />
+              <InProgressTab plan={plan} onResumeCourse={onResumeCourse} />
             )}
             {activeTab === "my-plan" && (
               <MyPlanTab
@@ -198,6 +204,8 @@ export function MyLearningPage({
                 onRemoveCourse={onRemoveCourse}
                 onExploreAlternatives={onExploreAlternatives}
                 onExploreNextRole={onExploreNextRole}
+                onStartPlan={onStartPlan}
+                planStarted={planStarted}
               />
             )}
             {activeTab === "skills" && (

@@ -15,6 +15,8 @@ interface ProgressivePlanModuleProps {
   swapDisabled?: boolean;
   onRemoveCourse?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreAlternatives?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
+  onStartPlan?: () => void;
+  planStarted?: boolean;
 }
 
 type StepStatus = "completed" | "active" | "pending";
@@ -78,6 +80,8 @@ export function ProgressivePlanModule({
   swapDisabled,
   onRemoveCourse,
   onExploreAlternatives,
+  onStartPlan,
+  planStarted,
 }: ProgressivePlanModuleProps) {
   // Determine step statuses
   const goalStatus: StepStatus = gatheredInfo.goal
@@ -115,6 +119,8 @@ export function ProgressivePlanModule({
         isRefining={isRefining}
         onRemoveCourse={onRemoveCourse}
         onExploreAlternatives={onExploreAlternatives}
+        onStartPlan={onStartPlan}
+        planStarted={planStarted}
       />
     );
   }
