@@ -4,6 +4,7 @@ import type { LearningPlan, PlanCourse } from "@/lib/plan-types";
 
 interface InProgressTabProps {
   plan: LearningPlan | null;
+  onResumeCourse?: (course: PlanCourse) => void;
 }
 
 function CourseProgressCard({
@@ -11,11 +12,13 @@ function CourseProgressCard({
   courseIndex,
   totalCourses,
   isActive,
+  onResume,
 }: {
   course: PlanCourse;
   courseIndex: number;
   totalCourses: number;
   isActive: boolean;
+  onResume?: () => void;
 }) {
   const progress = isActive ? Math.floor(Math.random() * 60) + 10 : 0;
 
@@ -38,8 +41,11 @@ function CourseProgressCard({
           </div>
         )}
       </div>
-      {isActive && (
-        <button className="shrink-0 rounded-lg bg-[#0056d2] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0048b0] transition-colors">
+      {isActive && onResume && (
+        <button
+          onClick={onResume}
+          className="shrink-0 rounded-lg bg-[#0056d2] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0048b0] transition-colors"
+        >
           Resume
         </button>
       )}
@@ -52,11 +58,13 @@ function CertificateCard({
   partner,
   partnerLogo,
   courses,
+  onResumeCourse,
 }: {
   title: string;
   partner: string;
   partnerLogo?: string;
   courses: PlanCourse[];
+  onResumeCourse?: (course: PlanCourse) => void;
 }) {
   return (
     <div className="rounded-2xl border border-[#e3e8ef] bg-white p-6 shadow-sm">
@@ -82,6 +90,7 @@ function CertificateCard({
             courseIndex={idx + 1}
             totalCourses={courses.length}
             isActive={idx === 0}
+            onResume={() => onResumeCourse?.(course)}
           />
         ))}
       </div>
@@ -89,7 +98,7 @@ function CertificateCard({
   );
 }
 
-export function InProgressTab({ plan }: InProgressTabProps) {
+export function InProgressTab({ plan, onResumeCourse }: InProgressTabProps) {
   if (!plan) {
     return (
       <div className="rounded-xl border border-dashed border-[#dae1ed] bg-[#fafbfc] px-6 py-10 text-center">
@@ -133,6 +142,7 @@ export function InProgressTab({ plan }: InProgressTabProps) {
           partner={group.partner}
           partnerLogo={group.partnerLogo}
           courses={group.courses}
+          onResumeCourse={onResumeCourse}
         />
       ))}
     </div>

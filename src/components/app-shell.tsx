@@ -33,7 +33,9 @@ import {
   setAllMastered,
   setRandomProgress,
   resetProgress,
+  completeCourse,
 } from "@/lib/skills-store";
+import { LexPage } from "@/components/lex/lex-page";
 
 const metadataJsonRegex = /```json\s*(\{[\s\S]*?\})\s*```\s*$/;
 
@@ -125,6 +127,9 @@ export function AppShell() {
   const [pendingIndicatorType, setPendingIndicatorType] = useState<"created" | "rebuilt" | "swapped" | null>(null);
   const messagesLengthRef = useRef(0); // tracks current messages length for onData
   const [roleProgress, setRoleProgress] = useState<RoleProgress | null>(null);
+  const [activeLexCourse, setActiveLexCourse] = useState<PlanCourse | null>(null);
+  const [planStarted, setPlanStarted] = useState(false);
+  const [lexItemsCompleted, setLexItemsCompleted] = useState(0);
 
   const setPlan = setPlanState;
 
@@ -542,6 +547,29 @@ export function AppShell() {
     sendMessage({ text: "Hi, I'd like to explore a new role goal." });
   }, [sendMessage, setPhase, setPlan]);
 
+  // LEX: enter learning experience for a specific course
+  const handleResumeCourse = useCallback((course: PlanCourse) => {
+    setActiveLexCourse(course);
+    setPlanStarted(true);
+    setPhase("learning");
+  }, [setPhase]);
+
+  const handleStartPlan = useCallback(() => {
+    if (!plan) return;
+    const firstCourse = plan.milestones[0]?.courses[0];
+    if (firstCourse) handleResumeCourse(firstCourse);
+  }, [plan, handleResumeCourse]);
+
+  const handleExitLex = useCallback(() => {
+    setActiveLexCourse(null);
+    setPhase("plan_generated");
+  }, [setPhase]);
+
+  const handleLexXpEarned = useCallback((skillXpMap: Record<string, number>) => {
+    setRoleProgress(prev => prev ? completeCourse(prev, skillXpMap) : prev);
+    setLexItemsCompleted(n => n + 1);
+  }, []);
+
   // Proto tools handlers
   const handleProtoSetAllMastered = useCallback(() => {
     if (!roleProgress) return;
@@ -648,7 +676,15 @@ export function AppShell() {
           ].filter(Boolean).join(" · ")}
         </div>
       )}
-      {phase === "entry" ? (
+      {phase === "learning" && activeLexCourse ? (
+        <LexPage
+          course={activeLexCourse}
+          roleProgress={roleProgress}
+          onXpEarned={handleLexXpEarned}
+          onExit={handleExitLex}
+          itemsCompleted={lexItemsCompleted}
+        />
+      ) : phase === "entry" ? (
         <EntryScreen onSend={handleSend} />
       ) : phase === "loading" ? (
         <LihpLoadingScreen />
@@ -687,6 +723,9 @@ export function AppShell() {
           onExploreAlternatives={handleExploreAlternatives}
           onNavigateHome={handleNavigateHome}
           onExploreNextRole={handleExploreNextRole}
+          onResumeCourse={handleResumeCourse}
+          onStartPlan={handleStartPlan}
+          planStarted={planStarted}
         />
       ) : (
         /* Homepage — shown after onboarding when clicking logo */
