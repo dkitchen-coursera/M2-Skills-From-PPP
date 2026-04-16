@@ -26,9 +26,13 @@ interface LihpHeaderProps {
   activePage?: "home" | "my-learning";
   /** Navigate to a page */
   onNavigate?: (page: "home" | "my-learning") => void;
+  /** Toggle chat side panel */
+  onToggleChat?: () => void;
+  /** Whether chat panel is currently open */
+  chatOpen?: boolean;
 }
 
-export function LihpHeader({ activePage = "home", onNavigate }: LihpHeaderProps) {
+export function LihpHeader({ activePage = "home", onNavigate, onToggleChat, chatOpen }: LihpHeaderProps) {
   return (
     <header className="w-full border-b border-[#dae1ed] bg-white px-8 py-[10px]">
       <div className="flex items-center justify-between">
@@ -65,7 +69,13 @@ export function LihpHeader({ activePage = "home", onNavigate }: LihpHeaderProps)
 
         {/* Right: Sparkle, Globe, Bell, Avatar — always far right */}
         <div className="flex shrink-0 items-center gap-2">
-          <SparkleOpenIcon className="h-6 w-6 shrink-0" />
+          <button
+            onClick={onToggleChat}
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${chatOpen ? "bg-[#e3eeff] text-[#0056d2]" : "text-[#5b6780] hover:text-[#0056d2]"}`}
+            aria-label="Toggle chat"
+          >
+            <SparkleOpenIcon className="h-6 w-6" />
+          </button>
           <button className="flex h-8 w-8 items-center justify-center text-[#5b6780] hover:text-[#0f1114]">
             <GlobeIcon className="h-5 w-5" />
           </button>

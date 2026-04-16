@@ -16,6 +16,7 @@ interface ChatSidePanelProps {
   stripQuestions?: boolean;
   onSend: (text: string) => void;
   onRetry: () => void;
+  onClose?: () => void;
 }
 
 export function ChatSidePanel({
@@ -29,6 +30,7 @@ export function ChatSidePanel({
   stripQuestions,
   onSend,
   onRetry,
+  onClose,
 }: ChatSidePanelProps) {
   return (
     <div className="flex h-full flex-col">
@@ -44,7 +46,7 @@ export function ChatSidePanel({
             </svg>
           </button>
           {/* Close X */}
-          <button className="text-[#5b6780] hover:text-[#0f1114]">
+          <button onClick={onClose} className="text-[#5b6780] hover:text-[#0f1114]">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M4.5 4.5l9 9M13.5 4.5l-9 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>

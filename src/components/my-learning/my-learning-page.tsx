@@ -105,16 +105,20 @@ export function MyLearningPage({
     return () => window.removeEventListener("resize", updateIndicator);
   }, [updateIndicator]);
 
-  // Chat panel is always visible on My Learning page for plan refinement
-  const chatPanelOpen = true;
+  const [chatPanelOpen, setChatPanelOpen] = useState(true);
   const roleTitle = roleProgress?.roleTitle ?? gatheredInfo.goal ?? "your career";
   const learnerInitials = "L";
 
   return (
     <div className="flex h-screen flex-col bg-white">
-      <LihpHeader activePage="my-learning" onNavigate={(page) => {
-        if (page === "home" && onNavigateHome) onNavigateHome();
-      }} />
+      <LihpHeader
+        activePage="my-learning"
+        onNavigate={(page) => {
+          if (page === "home" && onNavigateHome) onNavigateHome();
+        }}
+        onToggleChat={() => setChatPanelOpen((prev) => !prev)}
+        chatOpen={chatPanelOpen}
+      />
       <div className="relative flex-1 overflow-hidden">
         {/* Main content — scrollable */}
         <main className={chatPanelOpen ? "h-full overflow-y-auto pr-[416px]" : "h-full overflow-y-auto"}>
@@ -230,9 +234,11 @@ export function MyLearningPage({
               stripQuestions={stripQuestions}
               onSend={onSend}
               onRetry={onRetry}
+              onClose={() => setChatPanelOpen(false)}
             />
           </aside>
         )}
+
       </div>
     </div>
   );
