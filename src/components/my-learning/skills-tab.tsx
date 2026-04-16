@@ -179,21 +179,28 @@ function SkillCard({ skill }: { skill: SkillProgress }) {
   );
 }
 
-function OtherSkillsSection({ roleProgress }: { roleProgress: RoleProgress }) {
+function BelowFoldSection({
+  roleProgress,
+  mightSkills,
+  activeOptionalSkills,
+}: {
+  roleProgress: RoleProgress;
+  mightSkills: SkillProgress[];
+  activeOptionalSkills: SkillProgress[];
+}) {
   const [showAll, setShowAll] = useState(false);
 
   const role = ROLE_CATALOG.find((r) => r.id === roleProgress.roleId);
-  if (!role) return null;
 
   const trackedIds = new Set(Object.keys(roleProgress.skills));
-  const untrackedSkills = role.skills.filter((s) => !trackedIds.has(s.id));
+  const untrackedSkills = role ? role.skills.filter((s) => !trackedIds.has(s.id)) : [];
 
-  // Optional skills with 0 progress — not shown in the main sections
+  // Optional skills with 0 progress
   const notStartedOptional = Object.values(roleProgress.skills).filter(
     (s) => s.priority === "optional" && s.currentXp === 0
   );
 
-  const totalOther = untrackedSkills.length + notStartedOptional.length;
+  const totalOther = mightSkills.length + activeOptionalSkills.length + notStartedOptional.length + untrackedSkills.length;
   if (totalOther === 0) return null;
 
   return (
@@ -203,48 +210,84 @@ function OtherSkillsSection({ roleProgress }: { roleProgress: RoleProgress }) {
         onClick={() => setShowAll(!showAll)}
         className="flex w-full items-center justify-center gap-1 rounded-lg border border-[#dae1ed] bg-white px-4 py-2.5 text-sm font-medium text-[#0056d2] hover:bg-[#f0f6ff] transition-colors"
       >
-        {showAll ? "Hide other skills" : `View ${totalOther} skills not in progress`}
+        {showAll ? "Hide other skills" : `View ${totalOther} other skills for this role`}
         <ChevronDown size={16} className={clsx("transition-transform duration-200", showAll && "rotate-180")} />
       </button>
 
       {showAll && (
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 space-y-6">
+          {/* "Might" skills — worth developing */}
+          {mightSkills.length > 0 && (
+            <PrioritySection
+              title="Skills to develop"
+              description="Skill areas that deepen your expertise."
+              skills={mightSkills}
+            />
+          )}
+          {/* Active optional skills (have XP) */}
+          {activeOptionalSkills.length > 0 && (
+            <PrioritySection
+              title="Optional"
+              description="Nice-to-have skills that complement your role."
+              skills={activeOptionalSkills}
+            />
+          )}
           {/* Optional skills not yet started */}
-          {notStartedOptional.map((skill) => (
-            <div key={skill.skillId} className="flex items-center justify-between rounded-lg border border-[#e3e8ef] bg-[#fafbfc] px-4 py-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f0f6ff]">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#0056d2]">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-[#1f1f1f]">{skill.skillName}</span>
-                  <p className="text-xs text-[#5b6780]">
-                    {Object.keys(skill.expressions).length} expressions · Not started
-                  </p>
-                </div>
+          {notStartedOptional.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-[#1f1f1f]">Not started</h3>
+              <p className="mb-3 text-xs text-[#5b6780]">Additional skills available for this role.</p>
+              <div className="space-y-2">
+                {notStartedOptional.map((skill) => (
+                  <div key={skill.skillId} className="flex items-center justify-between rounded-lg border border-[#e3e8ef] bg-[#fafbfc] px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f0f6ff]">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#0056d2]">
+                          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-[#1f1f1f]">{skill.skillName}</span>
+                        <p className="text-xs text-[#5b6780]">
+                          {Object.keys(skill.expressions).length} expressions · Not started
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
+          )}
           {/* Untracked skills from catalog */}
-          {untrackedSkills.map((skill) => (
-            <div key={skill.id} className="flex items-center justify-between rounded-lg border border-[#e3e8ef] bg-[#fafbfc] px-4 py-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#9ca3af]">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-[#5b6780]">{skill.name}</span>
-                  <p className="text-xs text-[#9ca3af]">
-                    {skill.expressions.length} expressions · Not tracked
-                  </p>
-                </div>
+          {untrackedSkills.length > 0 && (
+            <div>
+              {notStartedOptional.length === 0 && (
+                <>
+                  <h3 className="text-sm font-semibold text-[#1f1f1f]">Not tracked</h3>
+                  <p className="mb-3 text-xs text-[#5b6780]">Additional skills available for this role.</p>
+                </>
+              )}
+              <div className="space-y-2">
+                {untrackedSkills.map((skill) => (
+                  <div key={skill.id} className="flex items-center justify-between rounded-lg border border-[#e3e8ef] bg-[#fafbfc] px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#9ca3af]">
+                          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-[#5b6780]">{skill.name}</span>
+                        <p className="text-xs text-[#9ca3af]">
+                          {skill.expressions.length} expressions · Not tracked
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>
@@ -273,34 +316,42 @@ export function SkillsTab({ roleProgress }: SkillsTabProps) {
 
   const sortedSkills = getSkillsByPriority(roleProgress);
 
-  // Show all should/might skills (even if 0 XP) — they're part of the plan
-  const allShouldSkills = sortedSkills.filter((s) => s.priority === "should");
-  const allMightSkills = sortedSkills.filter((s) => s.priority === "might");
-  // Optional skills only shown if they have progress; rest go in expandable section
+  // "Should" skills are the learner's plan focus — shown above the fold
+  const shouldSkills = sortedSkills.filter((s) => s.priority === "should");
+  // Everything else goes below the fold
+  const mightSkills = sortedSkills.filter((s) => s.priority === "might");
   const activeOptionalSkills = sortedSkills.filter((s) => s.priority === "optional" && s.currentXp > 0);
 
+  // Summary metrics scoped to "should" skills — the learner's stated plan
   const overallPercent = computeOverallMastery(roleProgress);
-  const totalSkills = Object.keys(roleProgress.skills).length;
-  const activeSkills = sortedSkills.filter((s) => s.currentXp > 0).length;
+  const shouldMastered = shouldSkills.filter((s) => s.currentXp >= s.xpMax).length;
+  const shouldInProgress = shouldSkills.filter((s) => s.currentXp > 0 && s.currentXp < s.xpMax).length;
+
+  const summaryLabel = roleProgress.isMastered
+    ? `All ${shouldSkills.length} skill areas mastered`
+    : shouldInProgress > 0
+      ? `${shouldInProgress} of ${shouldSkills.length} skill areas in progress`
+      : `${shouldSkills.length} skill areas to master`;
 
   return (
     <div className="space-y-6">
-      {/* Summary card */}
+      {/* Summary card — scoped to "should" skills (the learner's plan) */}
       <div className={`rounded-xl border p-5 ${roleProgress.isMastered ? "border-[#c4eed0] bg-[#f0faf3]" : "border-[#e3e8ef] bg-[#f0f6ff]"}`}>
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-[#1f1f1f]">
-              {roleProgress.roleTitle} Skills
+              Your Skill Plan
             </h2>
             <p className="text-sm text-[#5b6780]">
-              {roleProgress.isMastered
-                ? `All ${totalSkills} skill areas completed`
-                : `${activeSkills} of ${totalSkills} skill areas in progress`}
+              {summaryLabel}
+              {shouldMastered > 0 && !roleProgress.isMastered && (
+                <span className="ml-1 text-[#137333]">· {shouldMastered} completed</span>
+              )}
             </p>
           </div>
           <div className="text-right">
             <span className={`text-2xl font-bold ${roleProgress.isMastered ? "text-[#137333]" : "text-[#0056d2]"}`}>{overallPercent}%</span>
-            <p className="text-xs text-[#5b6780]">{roleProgress.isMastered ? "complete" : "overall mastery"}</p>
+            <p className="text-xs text-[#5b6780]">{roleProgress.isMastered ? "complete" : "mastery"}</p>
           </div>
         </div>
         <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/60">
@@ -311,25 +362,19 @@ export function SkillsTab({ roleProgress }: SkillsTabProps) {
         </div>
       </div>
 
-      {/* Priority sections — no badge per card, headings explain the grouping */}
+      {/* Above the fold: only "should" skills — what the learner needs to master */}
       <PrioritySection
         title="Skills to master"
-        description="Essential skill areas for your target role."
-        skills={allShouldSkills}
-      />
-      <PrioritySection
-        title="Skills to develop"
-        description="Skill areas that deepen your expertise."
-        skills={allMightSkills}
-      />
-      <PrioritySection
-        title="Optional"
-        description="Nice-to-have skills that complement your role."
-        skills={activeOptionalSkills}
+        description="Skill areas identified from your learning plan."
+        skills={shouldSkills}
       />
 
-      {/* Expandable: all other skills not yet in progress */}
-      <OtherSkillsSection roleProgress={roleProgress} />
+      {/* Below the fold: might, optional, and untracked skills */}
+      <BelowFoldSection
+        roleProgress={roleProgress}
+        mightSkills={mightSkills}
+        activeOptionalSkills={activeOptionalSkills}
+      />
     </div>
   );
 }

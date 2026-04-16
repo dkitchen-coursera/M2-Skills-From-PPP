@@ -102,7 +102,11 @@ async function handleMockMode(req: Request): Promise<Response> {
   const userText = lastUserText && "text" in lastUserText ? (lastUserText as { text: string }).text : "Hi";
 
   const userMessageCount = messages.filter((m: ChatUIMessage) => m.role === "user").length;
-  const mockResponse = getMockResponse(userText, userMessageCount);
+  const firstUserMsg = messages.find((m: ChatUIMessage) => m.role === "user");
+  const firstUserTextPart = firstUserMsg?.parts?.find((p: { type: string }) => p.type === "text");
+  const firstUserText = firstUserTextPart && "text" in firstUserTextPart
+    ? (firstUserTextPart as { text: string }).text : userText;
+  const mockResponse = getMockResponse(userText, userMessageCount, firstUserText);
 
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {

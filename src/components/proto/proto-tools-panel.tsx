@@ -108,16 +108,13 @@ export function ProtoToolsPanel({
             <div className="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-600 space-y-1">
               <p className="font-semibold text-gray-800">Prototype Features:</p>
               <ul className="list-disc pl-4 space-y-0.5">
-                <li>Conversational AI onboarding (role or skills path)</li>
+                <li>Conversational onboarding to identify goal role &amp; current experience</li>
+                <li>Skills-focused course plan generation (master skills, not just complete courses)</li>
+                <li>Course item completion earns Skill XP toward role goals</li>
+                <li>Role-focused Skills tab highlighting goal-relevant skills</li>
+                <li>Role mastery celebration on plan completion</li>
                 <li>Role catalog (4 roles, 8 skills each)</li>
-                <li>Skill gap analysis (should/might/optional)</li>
-                <li>Skill mastery plan (milestones per skill area)</li>
                 <li>XP-based progress tracking (0-1500 per skill)</li>
-                <li>Skill progress dashboard on LIHP</li>
-                <li>Course XP values and skill contribution</li>
-                <li>Real Coursera course search</li>
-                <li>Plan refinement via chat</li>
-                <li>Role mastery celebration</li>
                 <li>Proto tools for demo events</li>
               </ul>
             </div>
