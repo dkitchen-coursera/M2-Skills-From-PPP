@@ -123,6 +123,7 @@ export function ProtoToolsPanel({
                 <li>Skills-focused course plan generation (master skills, not just complete courses)</li>
                 <li>Course item completion earns Skill XP toward role goals</li>
                 <li>Role-focused Skills tab highlighting goal-relevant skills</li>
+                <li>Module complete celebration with skill progress &amp; plan-level mastery %</li>
                 <li>Role mastery celebration on plan completion</li>
                 <li>Role catalog (4 roles, 8 skills each)</li>
                 <li>XP-based progress tracking (0-1500 per skill)</li>
