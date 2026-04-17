@@ -14,7 +14,13 @@ import type {
   DebugLogEntry,
   RoleIdentificationData,
 } from "@/lib/types";
-import { ONBOARDED_GATHERED_INFO, IN_PROGRESS_GATHERED_INFO } from "@/lib/mock-persona-data";
+import {
+  ONBOARDED_GATHERED_INFO,
+  IN_PROGRESS_GATHERED_INFO,
+  RETURNING_INFERRED_ROLE_ID,
+  RETURNING_IN_PROGRESS_COURSES,
+  createReturningLearnerProgress,
+} from "@/lib/mock-persona-data";
 import type { LearningPlan, PlanCourse } from "@/lib/plan-types";
 import { conversationStateSchema } from "@/lib/prompts/schemas";
 import { findRoleById } from "@/lib/role-catalog";
@@ -37,6 +43,7 @@ import {
 } from "@/lib/skills-store";
 import { LexPage } from "@/components/lex/lex-page";
 import { CourseCompleteScreen } from "@/components/lex/course-complete-screen";
+import { UpgradeConfirmation } from "@/components/upgrade/upgrade-confirmation";
 
 const metadataJsonRegex = /```json\s*(\{[\s\S]*?\})\s*```\s*$/;
 
@@ -61,13 +68,45 @@ export function AppShell() {
   // Parse persona from query params
   const persona = (searchParams.get("persona") ?? "default") as Persona;
 
-  // Compute initial phase and gathered info based on persona
-  const initialPhase: AppPhase = (persona === "onboarded" || persona === "in-progress" || persona === "in-progress-skipped" || persona === "skipped") ? "browsing" : "entry";
+  // Tier flag — derived from persona name. C+ gates the personalized-plan feature.
+  // Once a non-C+ learner upgrades through the simulated checkout, this flips to true
+  // for the rest of the session via state (see hasCourseraPlus below).
+  const initialHasCourseraPlus =
+    persona === "new-cplus" ||
+    persona === "returning-cplus" ||
+    // Legacy personas — treat as C+ to keep their flows unchanged
+    persona === "default" ||
+    persona === "skipped" ||
+    persona === "onboarded" ||
+    persona === "in-progress" ||
+    persona === "in-progress-skipped";
+
+  const isReturning =
+    persona === "returning-cplus" || persona === "returning-non-cplus";
+
+  // Compute initial phase based on persona:
+  // - new-cplus → entry (today's default flow)
+  // - new-non-cplus → browsing (homepage with upsell)
+  // - returning-* → browsing (My Learning gates on plan/inferred role)
+  // - legacy returning personas → browsing (unchanged)
+  const initialPhase: AppPhase =
+    persona === "onboarded" ||
+    persona === "in-progress" ||
+    persona === "in-progress-skipped" ||
+    persona === "skipped" ||
+    persona === "new-non-cplus" ||
+    persona === "returning-cplus" ||
+    persona === "returning-non-cplus"
+      ? "browsing"
+      : "entry";
+
   const initialGatheredInfo: GatheredInfo = persona === "onboarded"
     ? { ...ONBOARDED_GATHERED_INFO }
     : persona === "in-progress"
       ? { ...IN_PROGRESS_GATHERED_INFO }
       : { goal: null, skills: null, background: null, constraints: null };
+
+  const initialInferredRoleId = isReturning ? RETURNING_INFERRED_ROLE_ID : null;
 
   // Persona-aware chat API URL: onboarded and in-progress personas use the onboarded prompt variant
   const chatApiUrl = useMemo(() => {
@@ -108,6 +147,25 @@ export function AppShell() {
   const [suggestedPills, setSuggestedPills] = useState<StructuredPillData>({ type: "single", question: "", options: [] });
   const [gatheredInfo, setGatheredInfo] = useState<GatheredInfo>(initialGatheredInfo);
 
+  // Tier + inferred-role state (Differentiated Segments)
+  const [hasCourseraPlus, setHasCourseraPlus] = useState<boolean>(initialHasCourseraPlus);
+  const [inferredRoleId, setInferredRoleIdState] = useState<string | null>(initialInferredRoleId);
+  const [inferredRoleConfirmed, setInferredRoleConfirmed] = useState<boolean>(false);
+  const inferredRole = inferredRoleId ? findRoleById(inferredRoleId) : null;
+  const inferredRoleTitle = inferredRole?.title ?? null;
+
+  // Mocked returning-learner script step — drives the scripted intro inside FullScreenChat.
+  // null = not in script. Set when chat opens with an inferred role.
+  const [mockChatStep, setMockChatStep] = useState<"confirm-role" | "scope-question" | null>(null);
+  const buildMockedMessage = useCallback(
+    (text: string): ChatUIMessage => ({
+      id: `mock-intro-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      role: "assistant",
+      parts: [{ type: "text", text }],
+    }) as ChatUIMessage,
+    [],
+  );
+
   // Merge incoming gathered info — never overwrite non-null with null
   const mergeGatheredInfo = useCallback((incoming: GatheredInfo) => {
     setGatheredInfo((prev) => ({
@@ -127,10 +185,16 @@ export function AppShell() {
   // Tracks the latest update type so the useEffect can compute the message index after render
   const [pendingIndicatorType, setPendingIndicatorType] = useState<"created" | "rebuilt" | "swapped" | null>(null);
   const messagesLengthRef = useRef(0); // tracks current messages length for onData
-  const [roleProgress, setRoleProgress] = useState<RoleProgress | null>(null);
+  const [roleProgress, setRoleProgress] = useState<RoleProgress | null>(
+    isReturning ? createReturningLearnerProgress() : null,
+  );
   const [activeLexCourse, setActiveLexCourse] = useState<PlanCourse | null>(null);
   const [completedLexCourse, setCompletedLexCourse] = useState<PlanCourse | null>(null);
   const [completedCourseIds, setCompletedCourseIds] = useState<Set<string>>(new Set());
+  // Courses the learner has actually entered (via Resume / Start plan). The In Progress
+  // tab only shows courses in this set (plus completed) — new learners with a plan but
+  // who haven't opened any course yet see an empty state, not the full plan list.
+  const [startedCourseIds, setStartedCourseIds] = useState<Set<string>>(new Set());
   const [planStarted, setPlanStarted] = useState(false);
   const [lexItemsCompleted, setLexItemsCompleted] = useState(0);
   const lexTriggerModuleComplete = useRef<(() => void) | null>(null);
@@ -155,7 +219,7 @@ export function AppShell() {
     [chatApiUrl],
   );
 
-  const { messages, sendMessage, status, error } = useChat<ChatUIMessage>({
+  const { messages, sendMessage, status, error, setMessages } = useChat<ChatUIMessage>({
     transport: chatTransport,
     onData(dataPart) {
       // Surface server-side debug logs in browser console
@@ -368,6 +432,62 @@ export function AppShell() {
   const handleSend = useCallback(
     (text: string) => {
       console.log("[AppShell] handleSend, current phase:", phase, "hasPlan:", !!plan);
+
+      // ── Mocked returning-learner script interceptor ──────────────────────
+      // While the mocked intro script is active, intercept pill clicks instead of
+      // sending them to the LLM. Advances the script or hands off cleanly.
+      if (mockChatStep === "confirm-role" && inferredRoleTitle) {
+        const isYes = text.toLowerCase().startsWith("yes,") || text.toLowerCase().includes(`aiming for ${inferredRoleTitle.toLowerCase()}`);
+        if (isYes) {
+          // Confirm + advance to scope question (still mocked)
+          setInferredRoleConfirmed(true);
+          const followup = `Great — let's build out your personalized plan for becoming a **${inferredRoleTitle}**. To start: would you like a plan that covers all the skills for this role, or one focused on specific skills you want to deepen?`;
+          setMessages((prev) => [
+            ...prev,
+            { id: `mock-user-${Date.now()}`, role: "user", parts: [{ type: "text", text }] } as ChatUIMessage,
+            buildMockedMessage(followup),
+          ]);
+          setSuggestedPills({
+            type: "single",
+            question: "How should we scope your plan?",
+            options: [
+              `Cover all skills for ${inferredRoleTitle}`,
+              "Focus on specific skills I want to deepen",
+              "Something else",
+            ],
+          });
+          setMockChatStep("scope-question");
+          return;
+        }
+        // "Update my goal" — drop the script and let the user type freely
+        setMockChatStep(null);
+        setMessages((prev) => [
+          ...prev,
+          { id: `mock-user-${Date.now()}`, role: "user", parts: [{ type: "text", text }] } as ChatUIMessage,
+          buildMockedMessage("No problem — what role or skills are you actually aiming for?"),
+        ]);
+        setSuggestedPills({ type: "single", question: "", options: [] });
+        // Clear the inferred goal so the LLM-driven flow can re-gather
+        setGatheredInfo((prev) => ({ ...prev, goal: null }));
+        return;
+      }
+
+      if (mockChatStep === "scope-question" && inferredRoleTitle) {
+        const isRoleScope = text.toLowerCase().includes("cover all skills") ||
+          text.toLowerCase().includes("all the skills");
+        const planScope = isRoleScope ? "role" : "skills";
+        // Hand off to the LLM with full context. The first real user message includes
+        // the goal, the chosen scope, and a concrete request to begin gathering.
+        setGatheredInfo((prev) => ({ ...prev, goal: prev.goal ?? inferredRoleTitle, planScope }));
+        setMockChatStep(null);
+        const handoff = isRoleScope
+          ? `I want to become a ${inferredRoleTitle}, and I'd like a plan that covers the full set of skills for this role.`
+          : `I want to become a ${inferredRoleTitle}, but I'd like to focus on specific skills I want to deepen rather than cover everything.`;
+        setPhase("full_screen_chat");
+        sendMessage({ text: handoff });
+        return;
+      }
+
       if (phase === "entry") {
         setPhase("full_screen_chat");
       }
@@ -406,7 +526,7 @@ export function AppShell() {
 
       sendMessage({ text: messageText });
     },
-    [phase, plan, gatheredInfo, sendMessage],
+    [phase, plan, gatheredInfo, sendMessage, mockChatStep, inferredRoleTitle, setMessages, buildMockedMessage, setPhase],
   );
 
   const handleRemoveCourse = useCallback(
@@ -556,6 +676,12 @@ export function AppShell() {
   const handleResumeCourse = useCallback((course: PlanCourse) => {
     setActiveLexCourse(course);
     setPlanStarted(true);
+    setStartedCourseIds((prev) => {
+      if (prev.has(course.id)) return prev;
+      const next = new Set(prev);
+      next.add(course.id);
+      return next;
+    });
     setPhase("learning");
   }, [setPhase]);
 
@@ -585,6 +711,12 @@ export function AppShell() {
     setCompletedLexCourse(null);
     setActiveLexCourse(course);
     setPlanStarted(true);
+    setStartedCourseIds((prev) => {
+      if (prev.has(course.id)) return prev;
+      const next = new Set(prev);
+      next.add(course.id);
+      return next;
+    });
     setLexItemsCompleted(0);
     setPhase("learning");
   }, [setPhase]);
@@ -652,6 +784,56 @@ export function AppShell() {
     sendMessage({ text: `I want to become a ${role.title}` });
   }, [sendMessage, setPhase, setPlan]);
 
+  // ── Inferred role handlers (Differentiated Segments) ──────────────────────
+  const handleChangeInferredRole = useCallback((roleId: string) => {
+    const role = findRoleById(roleId);
+    if (!role) return;
+    setInferredRoleIdState(roleId);
+    // Editing keeps the current confirmation state (per spec).
+    // If a synthetic roleProgress was being shown for the prior inferred role,
+    // rebuild it for the new one so Skills tab re-filters live.
+    if (!plan) {
+      // Rebuild seeded progress under the new role; XP carries over by skillId where
+      // shared, otherwise resets (createReturningLearnerProgress only seeds DA skills).
+      const next = createReturningLearnerProgress();
+      // If switched away from data-analyst, build a fresh empty progress for the new role
+      if (roleId !== RETURNING_INFERRED_ROLE_ID) {
+        const l1 = role.skills.filter((s) => s.level.includes("1") || s.level.includes("Foundations"));
+        const l2 = role.skills.filter((s) => s.level.includes("2") || s.level.includes("Advanced"));
+        const gap: GapAnalysis = {
+          should: l1.map((s) => s.id),
+          might: l2.slice(0, 3).map((s) => s.id),
+          optional: l2.slice(3).map((s) => s.id),
+        };
+        setRoleProgress(createInitialProgress(role, gap));
+      } else {
+        setRoleProgress(next);
+      }
+    }
+  }, [plan]);
+
+  const handleConfirmInferredRole = useCallback(() => {
+    setInferredRoleConfirmed(true);
+  }, []);
+
+  // Upgrade flow — used by both new and returning non-C+ upsell CTAs
+  const handleStartUpgrade = useCallback(() => {
+    setPhase("upgrade_confirmation");
+  }, [setPhase]);
+
+  // Confirm upgrade — flips to C+ and routes into chat (with goal seeded if returning)
+  const handleConfirmUpgrade = useCallback(() => {
+    setHasCourseraPlus(true);
+    if (inferredRoleTitle) {
+      // Seed goal so chat skips the "what's your goal?" question
+      setGatheredInfo((prev) => ({ ...prev, goal: prev.goal ?? inferredRoleTitle }));
+      setPhase("full_screen_chat");
+    } else {
+      // New non-C+ has no inferred role — enter conversational flow fresh
+      setPhase("entry");
+    }
+  }, [inferredRoleTitle, setPhase]);
+
   // Navigate to My Learning page (from homepage or header)
   const handleNavigateMyLearning = useCallback(() => {
     // If we have a plan, go to plan_generated to show My Learning with plan
@@ -676,6 +858,68 @@ export function AppShell() {
     }
   }, [sendMessage, setPhase]);
 
+  // Returning learners with an inferred role click "Set up your plan" (C+) →
+  // pre-fill the goal so the conversational flow can skip the "what's your goal?" step.
+  const handleStartPlanSetup = useCallback((message?: string) => {
+    if (inferredRoleTitle) {
+      setGatheredInfo((prev) => ({ ...prev, goal: prev.goal ?? inferredRoleTitle }));
+    }
+    setPhase("full_screen_chat");
+    if (message) {
+      sendMessage({ text: message });
+    }
+  }, [inferredRoleTitle, sendMessage, setPhase]);
+
+  // ── Mocked returning-learner conversational variant ───────────────────────
+  // When a returning learner enters the chat with an inferred role goal, inject a
+  // scripted assistant opening message + pills that adapt based on whether the role
+  // is confirmed. Pill clicks either advance the script (confirm role → ask scope)
+  // or hand off to the real LLM (scope choice → first real user message).
+
+  // Seed the mocked intro when chat opens with an inferred role and no real messages yet
+  useEffect(() => {
+    if (phase !== "full_screen_chat") return;
+    if (messages.length > 0) return;
+    if (!inferredRoleTitle) return;
+    if (mockChatStep !== null) return;
+
+    if (!inferredRoleConfirmed) {
+      const text = `Welcome back! Based on your activity, it looks like you're aiming to become a **${inferredRoleTitle}**. Does that sound right, or would you like to update your goal?`;
+      setMessages([buildMockedMessage(text)]);
+      // Trailing sentinel: SingleSelectCard drops the last option (freeform placeholder).
+      setSuggestedPills({
+        type: "single",
+        question: "Confirm your goal",
+        options: [
+          `Yes, I'm aiming for ${inferredRoleTitle}`,
+          "Update my goal",
+          "Something else",
+        ],
+      });
+      setMockChatStep("confirm-role");
+    } else {
+      const text = `Great — let's build out your personalized plan for becoming a **${inferredRoleTitle}**. To start: would you like a plan that covers all the skills for this role, or one focused on specific skills you want to deepen?`;
+      setMessages([buildMockedMessage(text)]);
+      setSuggestedPills({
+        type: "single",
+        question: "How should we scope your plan?",
+        options: [
+          `Cover all skills for ${inferredRoleTitle}`,
+          "Focus on specific skills I want to deepen",
+          "Something else",
+        ],
+      });
+      setMockChatStep("scope-question");
+    }
+  }, [phase, messages.length, inferredRoleTitle, inferredRoleConfirmed, mockChatStep, setMessages, buildMockedMessage]);
+
+  // Reset the mocked script when leaving chat (so re-entry can re-seed)
+  useEffect(() => {
+    if (phase !== "full_screen_chat" && phase !== "chatting") {
+      setMockChatStep(null);
+    }
+  }, [phase]);
+
   // Exit button on full-screen chat — return to appropriate page
   const handleExitFullScreenChat = useCallback(() => {
     if (plan) {
@@ -690,11 +934,13 @@ export function AppShell() {
     ? findRoleById(roleProgress.roleId)
     : null;
 
-  // Determine if we should show My Learning page (post-onboarding phases)
+  // Determine if we should show My Learning page (post-onboarding phases).
+  // Returning learners (inferredRoleId set) also land on My Learning even without a plan,
+  // so they see their inferred role header + Plan/Skills views gated by tier.
   const showMyLearning = phase === "plan_generated" || phase === "plan_generating"
     || phase === "viewing_plan" || phase === "chatting"
     || phase === "role_mastery"
-    || (phase === "browsing" && plan);
+    || (phase === "browsing" && (plan || !!inferredRoleId));
 
   return (
     <div
@@ -708,7 +954,12 @@ export function AppShell() {
           ].filter(Boolean).join(" · ")}
         </div>
       )}
-      {phase === "course_complete" && completedLexCourse ? (
+      {phase === "upgrade_confirmation" ? (
+        <UpgradeConfirmation
+          inferredRoleTitle={inferredRoleTitle}
+          onConfirm={handleConfirmUpgrade}
+        />
+      ) : phase === "course_complete" && completedLexCourse ? (
         <CourseCompleteScreen
           completedCourse={completedLexCourse}
           plan={plan}
@@ -761,6 +1012,16 @@ export function AppShell() {
           swapDisabled={swapDisabled}
           roleProgress={roleProgress}
           completedCourseIds={completedCourseIds}
+          startedCourseIds={startedCourseIds}
+          seededInProgressCourses={isReturning ? RETURNING_IN_PROGRESS_COURSES : undefined}
+          hasCourseraPlus={hasCourseraPlus}
+          inferredRoleId={inferredRoleId}
+          inferredRoleTitle={inferredRoleTitle}
+          inferredRoleConfirmed={inferredRoleConfirmed}
+          onChangeInferredRole={handleChangeInferredRole}
+          onConfirmInferredRole={handleConfirmInferredRole}
+          onUpgrade={handleStartUpgrade}
+          onStartPlanSetup={handleStartPlanSetup}
           onSend={handleSend}
           onRetry={handleRetry}
           onRemoveCourse={handleRemoveCourse}
@@ -772,14 +1033,16 @@ export function AppShell() {
           planStarted={planStarted}
         />
       ) : (
-        /* Homepage — shown after onboarding when clicking logo */
+        /* Homepage — shown after onboarding when clicking logo, or for new non-C+ */
         <Homepage
           learnerName="there"
           roleTitle={roleProgress?.roleTitle ?? gatheredInfo.goal ?? undefined}
           demandLabel={roleForHomepage?.demandLabel}
           roleProgress={roleProgress}
+          hasCourseraPlus={hasCourseraPlus}
           onStartChat={handleStartChat}
           onNavigateMyLearning={handleNavigateMyLearning}
+          onUpgrade={handleStartUpgrade}
         />
       )}
       <ProtoToolsPanel
@@ -792,6 +1055,16 @@ export function AppShell() {
         onTriggerCourseComplete={handleProtoTriggerCourseComplete}
         onJumpToRole={handleProtoJumpToRole}
         isInLex={phase === "learning" && !!activeLexCourse}
+        hasCourseraPlus={hasCourseraPlus}
+        onToggleCoursePlus={() => setHasCourseraPlus((v) => !v)}
+        inferredRoleId={inferredRoleId}
+        inferredRoleConfirmed={inferredRoleConfirmed}
+        onResetInferredRoleConfirmation={() => setInferredRoleConfirmed(false)}
+        onClearInferredRole={() => {
+          setInferredRoleIdState(null);
+          setInferredRoleConfirmed(false);
+          if (!plan) setRoleProgress(null);
+        }}
       />
     </div>
   );

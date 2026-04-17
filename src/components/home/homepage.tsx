@@ -4,6 +4,7 @@ import type { RoleProgress } from "@/lib/skills-store";
 import { computeOverallMastery } from "@/lib/skills-store";
 import { LihpHeader } from "@/components/lihp/lihp-header";
 import { SparkleIcon } from "@/components/shared/sparkle-icon";
+import { UpsellBanner } from "@/components/shared/upsell-banner";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,10 @@ interface HomepageProps {
   onStartChat: (message?: string) => void;
   /** Navigate to My Learning */
   onNavigateMyLearning: () => void;
+  /** Whether the learner has Coursera Plus access (gates upsell banner) */
+  hasCourseraPlus?: boolean;
+  /** Start the upgrade-to-Coursera-Plus flow */
+  onUpgrade?: () => void;
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -100,9 +105,13 @@ export function Homepage({
   roleProgress,
   onStartChat,
   onNavigateMyLearning,
+  hasCourseraPlus = true,
+  onUpgrade,
 }: HomepageProps) {
   const hasRole = !!roleTitle;
   const overallPercent = roleProgress ? computeOverallMastery(roleProgress) : 0;
+  // Show upsell when the learner is browsing without C+ access and without a confirmed role
+  const showUpsell = !hasCourseraPlus && !hasRole;
 
   return (
     <div className="flex h-screen flex-col bg-white">
@@ -124,6 +133,19 @@ export function Homepage({
                   {demandLabel && <DemandChip label={demandLabel} />}
                 </div>
               </>
+            ) : showUpsell ? (
+              <>
+                <p className="text-base text-[#5b6780]">
+                  Welcome, {learnerName}!
+                </p>
+                <h1 className="mt-1 text-2xl font-bold text-[#1f1f1f]">
+                  Browse courses to build in-demand skills
+                </h1>
+                <p className="mt-2 max-w-[640px] text-sm text-[#5b6780]">
+                  Explore courses, certificates, and specializations across topics
+                  in business, tech, design, and more.
+                </p>
+              </>
             ) : (
               <>
                 <p className="text-base text-[#5b6780]">
@@ -135,7 +157,9 @@ export function Homepage({
               </>
             )}
 
-            {/* Hero content grid: course card + sidebar */}
+            {/* Hero content grid: course card + sidebar.
+                Hidden for non-C+ no-role learners — they go straight to browse + upsell. */}
+            {!showUpsell && (
             <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* Main card — either resume learning or start chat */}
               <div className="lg:col-span-2 rounded-2xl border border-[#e3e8ef] bg-white p-6">
@@ -240,8 +264,22 @@ export function Homepage({
                 </div>
               </div>
             </div>
+            )}
           </div>
         </div>
+
+        {/* Coursera Plus upsell banner — shown to non-C+ learners browsing without a goal */}
+        {showUpsell && onUpgrade && (
+          <div className="mx-auto max-w-[1200px] px-8 pt-8">
+            <UpsellBanner
+              variant="hero"
+              headline="Get a personalized plan toward your career goal"
+              subhead="Coursera Plus learners get an AI-built learning plan that maps real Coursera courses to the skills you need — and adapts as you go."
+              ctaLabel="Upgrade to Coursera Plus"
+              onUpgrade={onUpgrade}
+            />
+          </div>
+        )}
 
         {/* Content sections */}
         <div className="mx-auto max-w-[1200px] px-8 py-8 space-y-10">

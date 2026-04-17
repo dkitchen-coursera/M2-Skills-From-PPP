@@ -1,8 +1,18 @@
 import type { UIMessage } from "ai";
 import type { LearningPlan, PlanCourse } from "@/lib/plan-types";
-import type { RoleProgress, GapAnalysis } from "@/lib/skills-store";
+import type { GapAnalysis } from "@/lib/skills-store";
 
-export type Persona = "default" | "skipped" | "onboarded" | "in-progress" | "in-progress-skipped";
+export type Persona =
+  | "default"
+  | "skipped"
+  | "onboarded"
+  | "in-progress"
+  | "in-progress-skipped"
+  // Differentiated segments (April 2026)
+  | "new-cplus"
+  | "new-non-cplus"
+  | "returning-cplus"
+  | "returning-non-cplus";
 
 export type AppPhase =
   | "entry"
@@ -16,13 +26,18 @@ export type AppPhase =
   | "viewing_plan"
   | "role_mastery"
   | "learning"
-  | "course_complete";
+  | "course_complete"
+  | "upgrade_confirmation";
+
+export type PlanScope = "role" | "skills";
 
 export type GatheredInfo = {
   goal: string | null;
   skills: string | null;
   background: string | null;
   constraints: string | null;
+  /** For returning learners: whether they want a role-wide or skills-focused plan. */
+  planScope?: PlanScope | null;
 };
 
 export type StructuredPillData = {

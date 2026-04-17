@@ -7,9 +7,11 @@ import type { LearningPlan, PlanCourse } from "@/lib/plan-types";
 import type { RoleProgress } from "@/lib/skills-store";
 import { LihpHeader } from "@/components/lihp/lihp-header";
 import { ChatSidePanel } from "@/components/lihp/chat-side-panel";
+import type { InProgressCourse } from "@/lib/mock-persona-data";
 import { MyPlanTab } from "./my-plan-tab";
 import { InProgressTab } from "./in-progress-tab";
 import { SkillsTab } from "./skills-tab";
+import { InferredRoleControl } from "./inferred-role-header";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -30,6 +32,21 @@ interface MyLearningPageProps {
   swapDisabled?: boolean;
   roleProgress: RoleProgress | null;
   completedCourseIds?: Set<string>;
+  /** Courses the learner has actually entered via Resume / Start plan. In Progress tab uses this. */
+  startedCourseIds?: Set<string>;
+  /** Standalone in-progress courses for returning learners (no plan required). */
+  seededInProgressCourses?: InProgressCourse[];
+  /** Tier — gates upsell banners + plan setup CTAs */
+  hasCourseraPlus?: boolean;
+  /** Inferred role — shown in editable header when set and no plan exists */
+  inferredRoleId?: string | null;
+  inferredRoleTitle?: string | null;
+  inferredRoleConfirmed?: boolean;
+  onChangeInferredRole?: (roleId: string) => void;
+  onConfirmInferredRole?: () => void;
+  onUpgrade?: () => void;
+  /** Trigger conversational onboarding (used by C+ "Set up your plan" CTA) */
+  onStartPlanSetup?: (message?: string) => void;
   onSend: (text: string) => void;
   onRetry: () => void;
   onRemoveCourse: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
@@ -79,6 +96,16 @@ export function MyLearningPage({
   swapDisabled,
   roleProgress,
   completedCourseIds,
+  startedCourseIds,
+  seededInProgressCourses,
+  hasCourseraPlus = true,
+  inferredRoleId,
+  inferredRoleTitle,
+  inferredRoleConfirmed = false,
+  onChangeInferredRole,
+  onConfirmInferredRole,
+  onUpgrade,
+  onStartPlanSetup,
   onSend,
   onRetry,
   onRemoveCourse,
@@ -113,7 +140,10 @@ export function MyLearningPage({
     return () => window.removeEventListener("resize", updateIndicator);
   }, [updateIndicator]);
 
-  const [chatPanelOpen, setChatPanelOpen] = useState(true);
+  // Returning learners (inferred role set, no plan yet) land with the chat sidebar
+  // closed — they're exploring My Learning, not actively in a planning conversation.
+  const isReturningWithoutPlan = !plan && !!inferredRoleId;
+  const [chatPanelOpen, setChatPanelOpen] = useState(!isReturningWithoutPlan);
   const roleTitle = roleProgress?.roleTitle ?? gatheredInfo.goal ?? "your career";
   const learnerInitials = "L";
 
@@ -138,16 +168,28 @@ export function MyLearningPage({
                 {learnerInitials}
               </div>
               {/* Welcome text */}
-              <div className="flex flex-col gap-1">
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <h1 className="text-xl font-semibold text-[#1f1f1f]">
                   My Learning
                 </h1>
-                <p className="text-sm text-[#5b6780]">
-                  Your career goal:{" "}
-                  <span className="font-semibold text-[#1f1f1f] underline">
-                    {roleTitle}
-                  </span>
-                </p>
+                {/* Career goal — inline inferred-role control for returning learners w/o plan,
+                    static text for plan-based or fallback states */}
+                {!plan && inferredRoleId && inferredRoleTitle && onChangeInferredRole && onConfirmInferredRole ? (
+                  <InferredRoleControl
+                    inferredRoleId={inferredRoleId}
+                    inferredRoleTitle={inferredRoleTitle}
+                    confirmed={inferredRoleConfirmed}
+                    onConfirm={onConfirmInferredRole}
+                    onChangeRole={onChangeInferredRole}
+                  />
+                ) : (
+                  <p className="text-sm text-[#5b6780]">
+                    Your career goal:{" "}
+                    <span className="font-semibold text-[#1f1f1f] underline">
+                      {roleTitle}
+                    </span>
+                  </p>
+                )}
               </div>
               {/* Illustration — extends below the banner like M1 prototype */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -192,7 +234,13 @@ export function MyLearningPage({
 
             {/* Tab content */}
             {activeTab === "in-progress" && (
-              <InProgressTab plan={plan} completedCourseIds={completedCourseIds} onResumeCourse={onResumeCourse} />
+              <InProgressTab
+                plan={plan}
+                completedCourseIds={completedCourseIds}
+                startedCourseIds={startedCourseIds}
+                seededInProgressCourses={seededInProgressCourses}
+                onResumeCourse={onResumeCourse}
+              />
             )}
             {activeTab === "my-plan" && (
               <MyPlanTab
@@ -209,11 +257,22 @@ export function MyLearningPage({
                 onExploreNextRole={onExploreNextRole}
                 onStartPlan={onStartPlan}
                 planStarted={planStarted}
+                hasCourseraPlus={hasCourseraPlus}
+                inferredRoleTitle={inferredRoleTitle}
+                onUpgrade={onUpgrade}
+                onStartPlanSetup={onStartPlanSetup}
               />
             )}
             {activeTab === "skills" && (
               <SkillsTab
                 roleProgress={roleProgress}
+                hasCourseraPlus={hasCourseraPlus}
+                inferredRoleId={!plan ? inferredRoleId : null}
+                inferredRoleTitle={!plan ? inferredRoleTitle : null}
+                inferredRoleConfirmed={inferredRoleConfirmed}
+                onConfirmInferredRole={onConfirmInferredRole}
+                onChangeInferredRole={onChangeInferredRole}
+                onUpgrade={onUpgrade}
               />
             )}
             {activeTab === "completed" && (
