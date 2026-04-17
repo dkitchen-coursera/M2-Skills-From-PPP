@@ -1,9 +1,11 @@
 "use client";
 
+import { Sparkles } from "lucide-react";
 import type { AppPhase, GatheredInfo } from "@/lib/types";
 import type { LearningPlan } from "@/lib/plan-types";
 import type { RoleProgress } from "@/lib/skills-store";
 import { ProgressivePlanModule } from "@/components/lihp/progressive-plan-module";
+import { NonCPlusPlanView, ReturningPlanView } from "./non-cplus-plan-view";
 
 interface MyPlanTabProps {
   gatheredInfo: GatheredInfo;
@@ -19,6 +21,11 @@ interface MyPlanTabProps {
   onExploreNextRole?: () => void;
   onStartPlan?: () => void;
   planStarted?: boolean;
+  // Differentiated Segments
+  hasCourseraPlus?: boolean;
+  inferredRoleTitle?: string | null;
+  onUpgrade?: () => void;
+  onStartPlanSetup?: (message?: string) => void;
 }
 
 function CompletedMilestone({ name, description }: { name: string; description: string }) {
@@ -47,6 +54,10 @@ export function MyPlanTab({
   onExploreNextRole,
   onStartPlan,
   planStarted,
+  hasCourseraPlus = true,
+  inferredRoleTitle,
+  onUpgrade,
+  onStartPlanSetup,
 }: MyPlanTabProps) {
   if (roleProgress?.isMastered && plan) {
     return (
@@ -98,6 +109,51 @@ export function MyPlanTab({
     );
   }
 
+  // Non-C+ returning view — resume current course + skills snapshot + upsell at bottom
+  if (!plan && phase !== "plan_generating" && !hasCourseraPlus) {
+    return (
+      <NonCPlusPlanView
+        roleProgress={roleProgress}
+        inferredRoleTitle={inferredRoleTitle ?? null}
+        onUpgrade={onUpgrade}
+      />
+    );
+  }
+
+  // Returning C+ view — set-up-plan prompt at top, then resume + skills snapshot
+  if (!plan && phase !== "plan_generating" && hasCourseraPlus && inferredRoleTitle && onStartPlanSetup) {
+    return (
+      <ReturningPlanView
+        roleProgress={roleProgress}
+        inferredRoleTitle={inferredRoleTitle}
+        topCta={
+          <div className="rounded-2xl border border-[#dae1ed] bg-gradient-to-br from-[#f0f6ff] to-white p-6 shadow-[0_1px_2px_rgba(15,17,20,0.04)]">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#e8f0fe]">
+                <Sparkles className="h-5 w-5 text-[#0056d2]" strokeWidth={1.75} />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-[#0f1114]">
+                  {`Set up your personalized plan for ${inferredRoleTitle}`}
+                </h2>
+                <p className="mt-1 text-sm text-[#4d5765]">
+                  We&rsquo;ll build a step-by-step plan from real Coursera courses,
+                  tailored to your goal and current skills. You can edit it any time.
+                </p>
+                <button
+                  onClick={() => onStartPlanSetup()}
+                  className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-[#0056d2] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#003e9c]"
+                >
+                  Set up my plan
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+      />
+    );
+  }
+
   // No-op for onViewPlan — plan is already visible in this tab
   const handleViewPlan = () => {};
 
@@ -119,8 +175,9 @@ export function MyPlanTab({
         planStarted={planStarted}
       />
 
-      {/* Empty state when no plan and not generating */}
-      {!plan && phase !== "plan_generating" && (
+      {/* Empty state when no plan and not generating — shown only for C+ no-inferred-role
+          fallback (regular new-C+ flow shows ProgressivePlanModule instead). */}
+      {!plan && phase !== "plan_generating" && !inferredRoleTitle && (
         <div className="rounded-xl border border-dashed border-[#dae1ed] bg-[#fafbfc] px-6 py-10 text-center">
           <p className="text-sm text-[#5b6780]">
             Your personalized learning plan will appear here once we finish

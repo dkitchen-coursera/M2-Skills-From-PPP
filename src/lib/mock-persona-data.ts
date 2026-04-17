@@ -1,4 +1,11 @@
 import type { GatheredInfo } from "@/lib/types";
+import { findRoleById } from "@/lib/role-catalog";
+import {
+  addSkillXp,
+  createInitialProgress,
+  type GapAnalysis,
+  type RoleProgress,
+} from "@/lib/skills-store";
 
 export const ONBOARDED_GATHERED_INFO: GatheredInfo = {
   goal: "Data Analyst",
@@ -72,3 +79,73 @@ export const SIMILAR_ACTIVITY_COURSES: InProgressCourse[] = [
     productType: "Specialization",
   },
 ];
+
+// ── Returning-learner seed data ──────────────────────────────────────────────
+//
+// Returning personas land on My Learning with an *inferred* role goal (not yet
+// confirmed) and some seeded skill-XP progress. Non-C+ also has an in-progress
+// course they can resume; C+ does not (so they can set up a personalized plan).
+
+export const RETURNING_INFERRED_ROLE_ID = "data-analyst";
+
+/** Resume-card data for returning learners on the My Plan tab. */
+export const RETURNING_NON_CPLUS_RESUME_COURSE: InProgressCourse = {
+  title: "Google Data Analytics",
+  partner: "Google",
+  partnerLogo: "/assets/google-logo.png",
+  rating: 4.8,
+  productType: "Professional Certificate",
+  progress: 28,
+};
+
+/**
+ * Standalone in-progress courses for returning learners (no plan required).
+ * Surfaced in the In Progress tab to simulate prior ad-hoc learning activity.
+ * The first course matches `RETURNING_NON_CPLUS_RESUME_COURSE` (the My Plan resume card).
+ */
+export const RETURNING_IN_PROGRESS_COURSES: InProgressCourse[] = [
+  RETURNING_NON_CPLUS_RESUME_COURSE,
+  {
+    title: "Excel Skills for Data Analytics and Visualization",
+    partner: "Macquarie University",
+    partnerLogo: "/assets/macquarie-logo.png",
+    rating: 4.7,
+    productType: "Specialization",
+    progress: 62,
+  },
+  {
+    title: "SQL for Data Science",
+    partner: "University of California, Davis",
+    partnerLogo: "/assets/ucdavis-logo.png",
+    rating: 4.6,
+    productType: "Course",
+    progress: 15,
+  },
+];
+
+/**
+ * Build a seeded RoleProgress for returning learners — partial XP across
+ * a handful of Data Analyst skills, simulating ad-hoc prior learning.
+ */
+export function createReturningLearnerProgress(): RoleProgress | null {
+  const role = findRoleById(RETURNING_INFERRED_ROLE_ID);
+  if (!role) return null;
+
+  // Treat L1 Data Analyst skills as "should", first 3 L2 as "might"
+  const l1 = role.skills.filter((s) => s.level.includes("Level 1"));
+  const l2 = role.skills.filter((s) => s.level.includes("Level 2"));
+  const gap: GapAnalysis = {
+    should: l1.map((s) => s.id),
+    might: l2.slice(0, 3).map((s) => s.id),
+    optional: l2.slice(3).map((s) => s.id),
+  };
+
+  let progress = createInitialProgress(role, gap);
+
+  // Seed some XP across 3 skills to simulate prior progress (~25-40% each)
+  progress = addSkillXp(progress, "data-acquisition-preparation", 900);
+  progress = addSkillXp(progress, "data-visualization-reporting", 600);
+  progress = addSkillXp(progress, "database-operations", 450);
+
+  return progress;
+}

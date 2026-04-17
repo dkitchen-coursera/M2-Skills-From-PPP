@@ -14,6 +14,13 @@ interface ProtoToolsPanelProps {
   onTriggerCourseComplete: () => void;
   onJumpToRole: (roleId: string) => void;
   isInLex?: boolean;
+  // Differentiated Segments controls (Phase 8)
+  hasCourseraPlus?: boolean;
+  onToggleCoursePlus?: () => void;
+  inferredRoleId?: string | null;
+  inferredRoleConfirmed?: boolean;
+  onResetInferredRoleConfirmation?: () => void;
+  onClearInferredRole?: () => void;
 }
 
 export function ProtoToolsPanel({
@@ -26,6 +33,12 @@ export function ProtoToolsPanel({
   onTriggerCourseComplete,
   onJumpToRole,
   isInLex,
+  hasCourseraPlus,
+  onToggleCoursePlus,
+  inferredRoleId,
+  inferredRoleConfirmed,
+  onResetInferredRoleConfirmation,
+  onClearInferredRole,
 }: ProtoToolsPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showFeatures, setShowFeatures] = useState(false);
@@ -151,6 +164,60 @@ export function ProtoToolsPanel({
                 <li>XP-based progress tracking (0-1500 per skill)</li>
                 <li>Proto tools for demo events</li>
               </ul>
+            </div>
+          )}
+
+          {/* Differentiated Segments controls */}
+          {(onToggleCoursePlus ||
+            onResetInferredRoleConfirmation ||
+            onClearInferredRole) && (
+            <div className="mt-3 rounded-lg border border-gray-200 bg-white p-2">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                Segments
+              </p>
+              <div className="space-y-1.5">
+                {onToggleCoursePlus && (
+                  <button
+                    onClick={onToggleCoursePlus}
+                    className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                  >
+                    <span>Coursera Plus</span>
+                    <span
+                      className={
+                        "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase " +
+                        (hasCourseraPlus
+                          ? "bg-[#0f1114] text-white"
+                          : "bg-gray-200 text-gray-700")
+                      }
+                    >
+                      {hasCourseraPlus ? "On" : "Off"}
+                    </span>
+                  </button>
+                )}
+                {onResetInferredRoleConfirmation && inferredRoleId && inferredRoleConfirmed && (
+                  <button
+                    onClick={onResetInferredRoleConfirmation}
+                    className="w-full rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-200"
+                  >
+                    Reset inferred role to inferred
+                  </button>
+                )}
+                {onClearInferredRole && inferredRoleId && (
+                  <button
+                    onClick={onClearInferredRole}
+                    className="w-full rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-200"
+                  >
+                    Clear inferred role
+                  </button>
+                )}
+                {inferredRoleId && (
+                  <p className="px-1 pt-1 text-[10px] text-gray-500">
+                    Role:{" "}
+                    <span className="font-medium text-gray-700">{inferredRoleId}</span>{" "}
+                    {inferredRoleConfirmed ? "(confirmed)" : "(inferred)"}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 

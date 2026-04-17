@@ -14,11 +14,20 @@ import {
   type ExpressionProgress,
 } from "@/lib/skills-store";
 import { ROLE_CATALOG } from "@/lib/role-catalog";
+import { UpsellBanner } from "@/components/shared/upsell-banner";
+import { InferredRoleControl } from "./inferred-role-header";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface SkillsTabProps {
   roleProgress: RoleProgress | null;
+  hasCourseraPlus?: boolean;
+  inferredRoleId?: string | null;
+  inferredRoleTitle?: string | null;
+  inferredRoleConfirmed?: boolean;
+  onConfirmInferredRole?: () => void;
+  onChangeInferredRole?: (roleId: string) => void;
+  onUpgrade?: () => void;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -296,7 +305,20 @@ function BelowFoldSection({
 
 // ── Main Component ─────────────────────────────────────────────────────────
 
-export function SkillsTab({ roleProgress }: SkillsTabProps) {
+export function SkillsTab({
+  roleProgress,
+  hasCourseraPlus = true,
+  inferredRoleId,
+  inferredRoleTitle,
+  inferredRoleConfirmed = false,
+  onConfirmInferredRole,
+  onChangeInferredRole,
+  onUpgrade,
+}: SkillsTabProps) {
+  // The Skills tab title + subtitle changes for inferred-only learners (no plan yet).
+  // Plan-based learners keep "Your Skill Plan".
+  const isInferredOnly = !!inferredRoleId && !!inferredRoleTitle;
+
   if (!roleProgress) {
     return (
       <div className="rounded-xl border border-dashed border-[#dae1ed] bg-[#fafbfc] px-6 py-10 text-center">
@@ -335,12 +357,15 @@ export function SkillsTab({ roleProgress }: SkillsTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* Summary card — scoped to "should" skills (the learner's plan) */}
+      {/* Summary card — scoped to "should" skills.
+          Inferred-only learners get a different heading + inline confirm/edit affordance. */}
       <div className={`rounded-xl border p-5 ${roleProgress.isMastered ? "border-[#c4eed0] bg-[#f0faf3]" : "border-[#e3e8ef] bg-[#f0f6ff]"}`}>
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-[#1f1f1f]">
-              Your Skill Plan
+              {isInferredOnly
+                ? `Skills for ${inferredRoleTitle}`
+                : "Your Skill Plan"}
             </h2>
             <p className="text-sm text-[#5b6780]">
               {summaryLabel}
@@ -360,12 +385,35 @@ export function SkillsTab({ roleProgress }: SkillsTabProps) {
             style={{ width: `${overallPercent}%` }}
           />
         </div>
+
+        {/* Inferred-role inline confirm/edit — shown when the skills view is scoped
+            to an inferred goal (no plan yet). Lets the learner correct the goal here
+            without leaving the Skills tab. */}
+        {isInferredOnly &&
+          inferredRoleId &&
+          inferredRoleTitle &&
+          onConfirmInferredRole &&
+          onChangeInferredRole && (
+            <div className="mt-4 rounded-lg border border-white/70 bg-white/70 px-3 py-2.5">
+              <InferredRoleControl
+                inferredRoleId={inferredRoleId}
+                inferredRoleTitle={inferredRoleTitle}
+                confirmed={inferredRoleConfirmed}
+                onConfirm={onConfirmInferredRole}
+                onChangeRole={onChangeInferredRole}
+              />
+            </div>
+          )}
       </div>
 
       {/* Above the fold: only "should" skills — what the learner needs to master */}
       <PrioritySection
         title="Skills to master"
-        description="Skill areas identified from your learning plan."
+        description={
+          isInferredOnly
+            ? `Skill areas commonly required for ${inferredRoleTitle}.`
+            : "Skill areas identified from your learning plan."
+        }
         skills={shouldSkills}
       />
 
@@ -375,6 +423,21 @@ export function SkillsTab({ roleProgress }: SkillsTabProps) {
         mightSkills={mightSkills}
         activeOptionalSkills={activeOptionalSkills}
       />
+
+      {/* Non-C+ upsell — promotes a personalized plan tailored to these skills */}
+      {!hasCourseraPlus && onUpgrade && (
+        <UpsellBanner
+          variant="inline"
+          headline={
+            inferredRoleTitle
+              ? `Maximize your skill progress for ${inferredRoleTitle}`
+              : "Maximize your skill progress with a personalized plan"
+          }
+          subhead="Coursera Plus builds an AI-tailored plan that focuses your time on the skills you actually need — and adapts as you progress."
+          ctaLabel="Upgrade to Coursera Plus"
+          onUpgrade={onUpgrade}
+        />
+      )}
     </div>
   );
 }
