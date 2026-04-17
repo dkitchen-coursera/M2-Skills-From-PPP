@@ -132,8 +132,11 @@ export function SegmentsScreen({ preservedQuery }: SegmentsScreenProps) {
           </div>
 
           <h1 className="mt-6 text-center text-[32px] font-bold leading-[40px] tracking-tight text-[#0f1114]">
-            PPP — Personalized Pathways
+            Skills Progress M2 + PPP V2
           </h1>
+          <p className="mt-2 text-center text-sm font-medium text-[#4d5765]">
+            Combined prototype
+          </p>
           <p className="mt-3 max-w-[640px] text-center text-base text-[#4d5765]">
             Select a learner segment to preview how the personalized-plan
             experience differs across audiences and Coursera Plus tiers.
