@@ -2,26 +2,24 @@
 
 import type { DailyGoal } from "@/lib/lex-types";
 
-function GoalIcon({ icon }: { icon: DailyGoal["icon"] }) {
-  if (icon === "star") {
-    return (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <path d="M10 2l2.8 5.68L18.5 8.5l-4.25 4.14 1 5.86L10 15.43 4.75 18.5l1-5.86L1.5 8.5l5.7-.82L10 2z" fill="#f59e0b" stroke="#f59e0b" strokeWidth="1" strokeLinejoin="round" />
-      </svg>
-    );
-  }
-  if (icon === "practice") {
-    return (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <path d="M3 17V7l7-5 7 5v10H3z" stroke="#0056d2" strokeWidth="1.5" strokeLinejoin="round" />
-        <path d="M8 17v-5h4v5" stroke="#0056d2" strokeWidth="1.5" strokeLinejoin="round" />
-      </svg>
-    );
-  }
+/**
+ * Star glyph matching the LexHeader pill — purple when the goal is met, soft grey
+ * when pending. All daily goals use the same star icon for consistency with the
+ * tracker pill (per M1 prototype).
+ */
+function GoalStar({ earned }: { earned: boolean }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <circle cx="10" cy="10" r="7.5" stroke="#8040ed" strokeWidth="1.5" />
-      <path d="M10 6v4l2.5 2.5" stroke="#8040ed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12 16.875L7.9 19.325c-.367.2-.712.163-1.037-.112-.325-.275-.475-.613-.45-1.013l.65-4.575-3.625-3.075c-.3-.267-.4-.567-.3-.9.1-.333.3-.567.6-.7l4.75-.425L10.363 4.25c.167-.367.4-.55.7-.55s.533.183.7.55l1.875 4.45 4.75.4c.3.033.5.267.6.7.1.333 0 .633-.3.9l-3.625 3.075.65 4.575c.025.4-.125.738-.45 1.013-.325.275-.67.312-1.037.112L12 16.875z"
+        fill={earned ? "#6923de" : "#C1CAD9"}
+      />
     </svg>
   );
 }
@@ -40,29 +38,24 @@ export function DailyGoalPanel({ goals, completedItems, completedPractice }: Dai
   }
 
   return (
-    <div className="absolute left-1/2 top-[56px] z-40 w-[320px] -translate-x-1/2 rounded-xl border border-[#e3e8ef] bg-white p-4 shadow-lg">
-      <h3 className="mb-3 text-sm font-semibold text-[#0f1114]">Today&apos;s Goals</h3>
-      <div className="space-y-3">
+    <div className="absolute left-1/2 top-[56px] z-40 w-[360px] -translate-x-1/2 rounded-2xl border border-[#dae1ed] bg-white p-4 shadow-lg">
+      <div className="space-y-2.5">
         {goals.map((goal) => {
           const current = getCurrent(goal);
-          const pct = Math.min(100, (current / goal.target) * 100);
           const done = current >= goal.target;
+          // Show "X/Y" suffix only for the goal currently in progress (not yet met).
+          const showProgress = !done && current > 0 && goal.target > 1;
           return (
             <div key={goal.id} className="flex items-center gap-3">
-              <GoalIcon icon={goal.icon} />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#0f1114]">{goal.label}</span>
-                  <span className={`text-xs font-semibold ${done ? "text-[#137333]" : "text-[#5b6780]"}`}>
-                    {current}/{goal.target}
+              <GoalStar earned={done} />
+              <div className="flex-1 text-sm leading-5 text-[#0f1114]">
+                {goal.label}
+                {showProgress && (
+                  <span className="ml-1 text-[#5b6780]">
+                    {" "}
+                    - {current}/{goal.target}
                   </span>
-                </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#e3e8ef]">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${done ? "bg-[#137333]" : "bg-[#f59e0b]"}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
+                )}
               </div>
             </div>
           );

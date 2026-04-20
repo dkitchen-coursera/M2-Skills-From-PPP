@@ -1,30 +1,52 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Play, BookOpen, FileText, CheckCircle2, Circle } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import clsx from "clsx";
 import type { LexSyllabus, LexModule, LexItem, LexItemType } from "@/lib/lex-types";
 
-function typeIcon(type: LexItemType, size: number = 14) {
+/**
+ * Returns the M1-style descriptor for an item type. Combines with the duration
+ * for the lecture-meta line, e.g. "Video · 6 min" or "Graded Assignment".
+ */
+function itemMeta(type: LexItemType, durationMinutes: number): string {
   switch (type) {
     case "video":
-      return <Play size={size} />;
+      return `Video · ${durationMinutes} min`;
     case "reading":
-      return <BookOpen size={size} />;
+      return `Reading · ${durationMinutes} min`;
     case "practice":
-      return <FileText size={size} />;
+      return durationMinutes >= 60
+        ? `Practice Assignment · ${Math.round(durationMinutes / 60)}h`
+        : `Practice Assignment · ${durationMinutes} min`;
     case "graded":
-      return <FileText size={size} />;
+      return "Graded Assignment";
   }
 }
 
-function typeLabel(type: LexItemType): string {
-  switch (type) {
-    case "video": return "Video";
-    case "reading": return "Reading";
-    case "practice": return "Practice";
-    case "graded": return "Graded Assignment";
+/**
+ * Lecture-status icon — filled green check for completed, hollow grey circle for pending.
+ * Sized at 20px to match M1.
+ */
+function LectureStatusIcon({ completed }: { completed: boolean }) {
+  if (completed) {
+    return (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="10" cy="10" r="10" fill="#137333" />
+        <path d="M5.5 10.5l3 3 6-6" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
   }
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="10" cy="10" r="9.25" fill="white" stroke="#C1CAD9" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function XpCoinIcon({ className }: { className?: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/assets/xp-coin.svg" alt="" className={className} aria-hidden="true" />;
 }
 
 function ItemRow({
@@ -42,34 +64,26 @@ function ItemRow({
     <button
       onClick={onClick}
       className={clsx(
-        "flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition-colors",
-        isActive && "bg-[#f0f6ff]",
-        !isActive && "hover:bg-[#fafbfc]",
+        "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors",
+        isActive ? "bg-[#E8F0FE]" : "hover:bg-[#E8F0FE]",
       )}
     >
-      <div className="mt-0.5 shrink-0">
-        {isCompleted ? (
-          <CheckCircle2 size={16} className="text-[#137333]" />
-        ) : (
-          <Circle size={16} className={isActive ? "text-[#0056d2]" : "text-[#c1cad9]"} />
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className={clsx(
-          "text-sm leading-tight",
-          isCompleted && "text-[#5b6780]",
-          isActive && !isCompleted && "font-medium text-[#0056d2]",
-          !isActive && !isCompleted && "text-[#0f1114]",
-        )}>
+      <span className="shrink-0">
+        <LectureStatusIcon completed={isCompleted} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span
+          className={clsx(
+            "block text-sm leading-5",
+            isActive ? "font-semibold text-[#0f1114]" : "font-normal text-[#0f1114]",
+          )}
+        >
           {item.title}
-        </p>
-        <div className="mt-0.5 flex items-center gap-1 text-xs text-[#5b6780]">
-          {typeIcon(item.type, 12)}
-          <span>{typeLabel(item.type)}</span>
-          <span>·</span>
-          <span>{item.durationMinutes} min</span>
-        </div>
-      </div>
+        </span>
+        <span className="mt-0.5 block text-xs leading-[18px] text-[#5b6780]">
+          {itemMeta(item.type, item.durationMinutes)}
+        </span>
+      </span>
     </button>
   );
 }
@@ -88,34 +102,40 @@ function ModuleSection({
   defaultExpanded: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const allItems = module.lessonGroups.flatMap((g) => g.items);
-  const completedCount = allItems.filter((item) => completedItemIds.has(item.id)).length;
 
   return (
-    <div className="border-b border-[#e3e8ef] last:border-0">
+    <div>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-[#fafbfc]"
+        className="flex w-full items-start justify-between gap-2 rounded-lg px-1 py-3 text-left hover:bg-[#E8F0FE]"
       >
-        <ChevronDown
-          size={16}
-          className={clsx("shrink-0 text-[#5b6780] transition-transform duration-200", expanded && "rotate-180")}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[#0f1114]">{module.title}</p>
-          {module.subtitle && (
-            <p className="text-xs text-[#5b6780]">{module.subtitle}</p>
-          )}
-        </div>
-        <span className="shrink-0 text-xs text-[#5b6780]">
-          {completedCount}/{allItems.length}
+        <span className="flex min-w-0 flex-1 flex-col gap-0">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[#5b6780]">
+            Module {module.title.replace(/^Module\s*/, "")}
+          </span>
+          <span className="text-base font-semibold leading-6 text-[#0f1114]">
+            {module.subtitle}
+          </span>
         </span>
+        <ChevronDown
+          size={20}
+          strokeWidth={2}
+          className={clsx(
+            "mt-1 shrink-0 text-[#5b6780] transition-transform duration-200",
+            expanded && "rotate-180",
+          )}
+        />
       </button>
       {expanded && (
-        <div className="px-2 pb-2">
-          {module.lessonGroups.map((group) => (
-            <div key={group.id} className="mb-1">
-              <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#5b6780]">
+        <div className="pb-2">
+          {module.lessonGroups.map((group, gIdx) => (
+            <div key={group.id}>
+              <p
+                className={clsx(
+                  "px-1 pb-1 pt-2 text-xs font-semibold leading-[18px] text-[#5b6780]",
+                  gIdx === 0 && "pt-1",
+                )}
+              >
                 {group.title}
               </p>
               {group.items.map((item) => (
@@ -142,6 +162,7 @@ interface LexSidebarProps {
   sessionXp: number;
   onSelectItem: (itemId: string) => void;
   onOpenSkillProgress: () => void;
+  onClose?: () => void;
 }
 
 export function LexSidebar({
@@ -151,6 +172,7 @@ export function LexSidebar({
   sessionXp,
   onSelectItem,
   onOpenSkillProgress,
+  onClose,
 }: LexSidebarProps) {
   const activeModuleId = activeItemId
     ? syllabus.modules.find((m) =>
@@ -159,28 +181,48 @@ export function LexSidebar({
     : syllabus.modules[0]?.id;
 
   return (
-    <aside className="flex h-full w-[320px] shrink-0 flex-col border-r border-[#dae1ed] bg-white">
-      {/* Course title + XP */}
-      <div className="border-b border-[#e3e8ef] px-4 py-4">
-        <h2 className="text-base font-semibold text-[#0f1114]">{syllabus.courseTitle}</h2>
-        <p className="mt-0.5 text-xs text-[#5b6780]">{syllabus.partner}</p>
-        <div className="mt-3 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="text-lg">🪙</span>
-            <span className="text-sm font-semibold text-[#0f1114]">{sessionXp} XP</span>
-            <span className="text-xs text-[#5b6780]">earned today</span>
-          </div>
+    <aside className="flex h-full w-[320px] shrink-0 flex-col rounded-2xl bg-white">
+      {/* Sidebar header — course title + close button */}
+      <div className="flex min-h-[52px] shrink-0 items-center justify-between gap-2 px-4 pb-4 pt-4">
+        <h2 className="min-w-0 flex-1 text-[20px] font-semibold leading-6 tracking-tight text-[#0f172a]">
+          {syllabus.courseTitle}
+        </h2>
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="Close navigation"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#5b6780] transition-colors hover:bg-[#e3e8ef] hover:text-[#0f1114]"
+          >
+            <X size={18} strokeWidth={2} />
+          </button>
+        )}
+      </div>
+
+      {/* Skill points tracker — between header and module list */}
+      <div className="flex shrink-0 flex-col gap-1 border-b border-t border-[#dae1ed] bg-white px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-semibold text-[#0f1114]">
+            Today&rsquo;s Skill Points
+          </span>
           <button
             onClick={onOpenSkillProgress}
-            className="text-xs font-medium text-[#0056d2] hover:underline"
+            className="inline-flex items-center gap-1.5 text-[#946100] hover:text-[#7a5000]"
+            aria-label="View Skill Points details"
           >
-            See skill progress
+            <XpCoinIcon className="h-5 w-5" />
+            <span className="text-sm font-semibold">{sessionXp} XP</span>
           </button>
         </div>
+        <button
+          onClick={onOpenSkillProgress}
+          className="self-start text-xs leading-[18px] text-[#0f1114] underline underline-offset-2 hover:text-[#5b6780]"
+        >
+          See skill progress
+        </button>
       </div>
 
       {/* Modules */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto px-4">
         {syllabus.modules.map((module) => (
           <ModuleSection
             key={module.id}

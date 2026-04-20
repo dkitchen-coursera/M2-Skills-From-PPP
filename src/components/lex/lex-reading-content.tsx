@@ -1,78 +1,153 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { ArrowRight, Check, Clock, ThumbsUp, ThumbsDown, AlertCircle } from "lucide-react";
 import type { LexItem } from "@/lib/lex-types";
 
 interface LexReadingContentProps {
   item: LexItem;
   onComplete: () => void;
+  onNext?: () => void;
 }
 
-export function LexReadingContent({ item, onComplete }: LexReadingContentProps) {
+export function LexReadingContent({ item, onComplete, onNext }: LexReadingContentProps) {
+  const skillSubtitle = item.skillTags[0] ?? "Visualizing and Reporting Clean Data";
+
+  // Local "marked complete" state — gates the Completed indicator + Next-item CTA.
+  // Resets on item change so the next reading starts fresh.
+  const [marked, setMarked] = useState(false);
+  useEffect(() => {
+    setMarked(false);
+  }, [item.id]);
+
+  const handleMarkComplete = () => {
+    if (marked) return;
+    setMarked(true);
+    onComplete();
+  };
+
+  const handleGoNext = () => {
+    if (onNext) onNext();
+  };
+
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="mx-auto w-full max-w-3xl px-8 py-8">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {item.skillTags.map((tag) => (
-              <span key={tag} className="rounded-full bg-[#f0f6ff] px-2.5 py-0.5 text-xs text-[#0056d2]">
-                {tag}
-              </span>
-            ))}
+    <div className="flex h-full w-full flex-1 flex-col overflow-y-auto">
+      <div className="mx-auto w-full max-w-[820px] px-8 pb-32 pt-8">
+        {/* Title row + Save note */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-bold leading-8 tracking-tight text-[#0f1114]">
+              {item.title}
+            </h1>
+            <p className="mt-1 text-sm text-[#5b6780]">
+              <span className="font-semibold text-[#946100]">{item.xpValue} XP</span>
+              <span className="mx-1.5">·</span>
+              {skillSubtitle}
+            </p>
+            <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-[#5b6780]">
+              <Clock size={14} strokeWidth={1.75} />
+              {item.durationMinutes} min read
+            </p>
           </div>
-          <h1 className="text-2xl font-bold text-[#0f1114]">{item.title}</h1>
-          <p className="mt-1 text-sm text-[#5b6780]">{item.durationMinutes} min read · +{item.xpValue} XP</p>
+          <button className="shrink-0 text-sm font-semibold text-[#0056d2] hover:underline">
+            + Save note
+          </button>
         </div>
 
-        {/* Content */}
-        <div className="space-y-4 text-[15px] leading-relaxed text-[#1f1f1f]">
+        {/* Body */}
+        <div className="mt-6 space-y-4 text-[15px] leading-7 text-[#1f1f1f]">
           <p>
-            This reading explores the foundational concepts behind {item.skillTags[0] ?? "this topic"},
-            helping you build a solid understanding that you can apply in real-world scenarios.
+            Effective data reporting starts with clean, well-formatted data. When your
+            data is properly structured, it becomes easier to analyze, visualize, and
+            communicate insights to stakeholders.
           </p>
           <p>
-            Effective practitioners combine theoretical knowledge with hands-on experience.
-            As you read through this material, consider how each concept connects to your
-            broader learning goals and the skills you&apos;re developing.
+            Key principles for formatting data include using consistent date formats,
+            removing duplicates, handling null values appropriately, and ensuring column
+            headers are clear and descriptive.
           </p>
+          <p>
+            Tools like spreadsheets and databases offer built-in formatting options, but
+            understanding the underlying principles helps you make better decisions about
+            how to organize your data.
+          </p>
+        </div>
 
-          <h2 className="!mt-8 text-lg font-semibold text-[#0f1114]">Key Concepts</h2>
-          <ul className="list-disc space-y-2 pl-6">
-            <li>Understanding the fundamental principles and how they relate to practice</li>
-            <li>Identifying common patterns and when to apply specific techniques</li>
-            <li>Recognizing the relationship between theory and real-world application</li>
-            <li>Building a framework for continued learning and skill development</li>
+        {/* Key Takeaways — light grey box with bullet list */}
+        <div className="mt-6 rounded-xl bg-[#F8FAFC] p-5">
+          <h2 className="text-base font-semibold text-[#0f1114]">Key Takeaways</h2>
+          <ul className="mt-3 space-y-2 text-sm leading-6 text-[#0f1114]">
+            <li className="flex gap-2.5">
+              <span className="mt-2 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#0f1114]" />
+              <span>Use consistent formatting across your dataset to avoid errors in analysis</span>
+            </li>
+            <li className="flex gap-2.5">
+              <span className="mt-2 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#0f1114]" />
+              <span>Clean null values before analysis — either remove them or replace with appropriate defaults</span>
+            </li>
+            <li className="flex gap-2.5">
+              <span className="mt-2 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#0f1114]" />
+              <span>Document your formatting decisions so others can understand your process</span>
+            </li>
           </ul>
-
-          <h2 className="!mt-8 text-lg font-semibold text-[#0f1114]">Key Takeaways</h2>
-          <div className="rounded-xl border border-[#e3e8ef] bg-[#fafbfc] p-4">
-            <ul className="space-y-2 text-sm">
-              <li className="flex items-start gap-2">
-                <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#0056d2] text-[10px] text-white">✓</span>
-                <span>Master the core principles before moving to advanced applications</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#0056d2] text-[10px] text-white">✓</span>
-                <span>Practice consistently to develop fluency with key techniques</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#0056d2] text-[10px] text-white">✓</span>
-                <span>Connect new knowledge to your existing skill framework</span>
-              </li>
-            </ul>
-          </div>
         </div>
 
-        {/* Complete button */}
-        <div className="mt-8 flex justify-center">
-          <button
-            onClick={onComplete}
-            className="rounded-lg bg-[#0056d2] px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0048b0]"
-          >
-            Mark as Complete
+        {/* Action row — Mark as complete (initial) OR Go to next item + Completed (after) */}
+        <div className="mt-6 flex items-center gap-3">
+          {!marked ? (
+            <button
+              onClick={handleMarkComplete}
+              className="inline-flex items-center justify-center rounded-lg bg-[#0056d2] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#003e9c]"
+            >
+              Mark as complete
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleGoNext}
+                className="inline-flex items-center justify-center rounded-lg bg-[#0056d2] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#003e9c]"
+              >
+                Go to next item
+              </button>
+              <span className="inline-flex items-center gap-2 px-2 py-2 text-sm font-semibold text-[#137333]">
+                <Check size={16} strokeWidth={2.5} />
+                Completed
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Feedback row */}
+        <div className="mt-3 flex items-center gap-5 text-xs text-[#5b6780]">
+          <button className="inline-flex items-center gap-1.5 hover:text-[#0f1114]">
+            <ThumbsUp size={14} strokeWidth={1.75} />
+            Like
+          </button>
+          <button className="inline-flex items-center gap-1.5 hover:text-[#0f1114]">
+            <ThumbsDown size={14} strokeWidth={1.75} />
+            Dislike
+          </button>
+          <button className="inline-flex items-center gap-1.5 hover:text-[#0f1114]">
+            <AlertCircle size={14} strokeWidth={1.75} />
+            Report an issue
           </button>
         </div>
       </div>
+
+      {/* Sticky bottom-right CTA — only appears after the reading is marked complete */}
+      {marked && (
+        <div className="pointer-events-none sticky bottom-0 z-10 border-t border-[#dae1ed] bg-white px-8 py-3">
+          <div className="pointer-events-auto flex justify-end">
+            <button
+              onClick={handleGoNext}
+              className="inline-flex items-center gap-2 rounded-lg border border-[#0056d2] bg-white px-5 py-2.5 text-sm font-semibold text-[#0056d2] transition-colors hover:bg-[#f0f6ff]"
+            >
+              Go to next item
+              <ArrowRight size={16} strokeWidth={2} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

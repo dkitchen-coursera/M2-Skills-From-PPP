@@ -1,176 +1,281 @@
 "use client";
 
 import { useState } from "react";
-import clsx from "clsx";
+import { ArrowLeft, ArrowRight, Sparkles, X } from "lucide-react";
 import type { LexItem } from "@/lib/lex-types";
+import type { RoleProgress } from "@/lib/skills-store";
+import { EXPRESSION_XP_MAX } from "@/lib/skills-store";
+import { findRoleById } from "@/lib/role-catalog";
+import { distributeXpToSkills } from "@/lib/lex-data";
 
 interface LexAssignmentContentProps {
   item: LexItem;
+  targetSkillIds: string[];
+  roleProgress: RoleProgress | null;
   onComplete: () => void;
+  onNext?: () => void;
 }
 
-const MOCK_QUESTIONS = [
-  {
-    question: "Which of the following best describes the primary goal of this skill area?",
-    options: [
-      "Reducing overall project complexity",
-      "Applying systematic techniques to solve problems effectively",
-      "Eliminating the need for collaboration",
-      "Focusing exclusively on theoretical knowledge",
-    ],
-    correct: 1,
-  },
-  {
-    question: "What is the recommended approach when applying new techniques in practice?",
-    options: [
-      "Jump directly to the most advanced method",
-      "Start with foundational concepts and build progressively",
-      "Avoid all existing frameworks",
-      "Focus only on memorization",
-    ],
-    correct: 1,
-  },
-  {
-    question: "How should practitioners evaluate their progress in skill development?",
-    options: [
-      "By comparing themselves to experts only",
-      "Through consistent practice and reflection on outcomes",
-      "By avoiding challenging tasks",
-      "Through a single comprehensive test",
-    ],
-    correct: 1,
-  },
+const COACH_PROMPTS = [
+  { label: "Help me practice", icon: Sparkles },
+  { label: "Let's chat", icon: Sparkles },
 ];
 
-export function LexAssignmentContent({ item, onComplete }: LexAssignmentContentProps) {
-  const [started, setStarted] = useState(false);
-  const [answers, setAnswers] = useState<(number | null)[]>(MOCK_QUESTIONS.map(() => null));
-  const [submitted, setSubmitted] = useState(false);
+/**
+ * Mirrors the M1 prototype: an assignment-details screen → click Start → success-state
+ * screen ("You passed! Great job") with per-skill XP cards. No actual quiz UI — this is
+ * a prototype simulating the post-completion experience.
+ */
+export function LexAssignmentContent({
+  item,
+  targetSkillIds,
+  roleProgress,
+  onComplete,
+  onNext,
+}: LexAssignmentContentProps) {
+  const [view, setView] = useState<"details" | "success">("details");
 
-  const handleSelect = (qIndex: number, optIndex: number) => {
-    if (submitted) return;
-    setAnswers((prev) => {
-      const next = [...prev];
-      next[qIndex] = optIndex;
-      return next;
-    });
+  const handleStart = () => {
+    setView("success");
+    onComplete();
   };
 
-  const handleSubmit = () => {
-    setSubmitted(true);
-    setTimeout(onComplete, 1500);
+  const handleNext = () => {
+    setView("details");
+    if (onNext) onNext();
   };
 
-  const allAnswered = answers.every((a) => a !== null);
-  const score = submitted
-    ? MOCK_QUESTIONS.filter((q, i) => answers[i] === q.correct).length
-    : 0;
-
-  if (!started) {
+  if (view === "success") {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center bg-[#fafbfc]">
-        <div className="w-full max-w-lg rounded-2xl border border-[#e3e8ef] bg-white p-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#f0f6ff]">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="#0056d2" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M9 12h6M9 16h4" stroke="#0056d2" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-semibold text-[#0f1114]">{item.title}</h2>
-          <p className="mt-2 text-sm text-[#5b6780]">
-            {item.type === "graded" ? "Graded assignment" : "Practice exercise"} · {item.durationMinutes} min · +{item.xpValue} XP
-          </p>
-          <div className="mt-2 flex flex-wrap justify-center gap-1.5">
-            {item.skillTags.map((tag) => (
-              <span key={tag} className="rounded-full bg-[#f0f6ff] px-2.5 py-0.5 text-xs text-[#0056d2]">
-                {tag}
-              </span>
-            ))}
-          </div>
-          <button
-            onClick={() => setStarted(true)}
-            className="mt-6 rounded-lg bg-[#0056d2] px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0048b0]"
-          >
-            Start {item.type === "graded" ? "Assignment" : "Practice"}
-          </button>
-        </div>
-      </div>
+      <SuccessView
+        item={item}
+        targetSkillIds={targetSkillIds}
+        roleProgress={roleProgress}
+        onBack={() => setView("details")}
+        onNext={handleNext}
+      />
     );
   }
 
+  return <DetailsView item={item} onStart={handleStart} />;
+}
+
+// ── Details view ─────────────────────────────────────────────────────────────
+
+function DetailsView({ item, onStart }: { item: LexItem; onStart: () => void }) {
+  const skillSubtitle = item.skillTags[0] ?? "Visualizing and Reporting Clean Data";
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="mx-auto w-full max-w-3xl px-8 py-8">
-        <h1 className="text-xl font-semibold text-[#0f1114]">{item.title}</h1>
+    <div className="flex h-full w-full flex-1 flex-col overflow-y-auto px-8 py-8">
+      <div className="mx-auto w-full max-w-[820px]">
+        <h1 className="text-2xl font-bold leading-8 tracking-tight text-[#0f1114]">
+          {item.title}
+        </h1>
         <p className="mt-1 text-sm text-[#5b6780]">
-          {MOCK_QUESTIONS.length} questions · +{item.xpValue} XP
+          <span className="font-semibold text-[#946100]">{item.xpValue} XP</span>
+          <span className="mx-1.5">·</span>
+          {skillSubtitle}
         </p>
 
-        {submitted && (
-          <div className={clsx(
-            "mt-4 rounded-lg px-4 py-3 text-sm font-semibold",
-            score === MOCK_QUESTIONS.length
-              ? "bg-[#f0faf3] text-[#137333]"
-              : "bg-[#fff7ed] text-[#c2410c]",
-          )}>
-            Score: {score}/{MOCK_QUESTIONS.length} ({Math.round((score / MOCK_QUESTIONS.length) * 100)}%)
+        <p className="mt-6 text-sm font-medium text-[#5b6780]">
+          Review Learning Objectives
+        </p>
+
+        {/* Coach */}
+        <section className="mt-4 rounded-2xl bg-[#F8FAFC] p-5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-[#2F3746]">Coach</h2>
+            <span className="rounded bg-[#E2E8F0] px-1.5 py-0.5 text-[11px] font-medium text-[#6B7280]">
+              Beta
+            </span>
           </div>
-        )}
+          <p className="mt-2 text-sm text-[#0f1114]">
+            Ready to review what you&rsquo;ve learned before starting the assignment?
+            I&rsquo;m here to help.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {COACH_PROMPTS.map((p) => (
+              <button
+                key={p.label}
+                className="inline-flex items-center gap-2 rounded-[10px] border border-[#0056D2] bg-white px-4 py-2 text-sm font-semibold text-[#0056D2] transition-colors hover:bg-[#f0f6ff]"
+              >
+                <p.icon size={16} className="shrink-0" strokeWidth={1.75} />
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </section>
 
-        <div className="mt-6 space-y-8">
-          {MOCK_QUESTIONS.map((q, qIdx) => (
-            <div key={qIdx}>
-              <p className="text-sm font-semibold text-[#0f1114]">
-                {qIdx + 1}. {q.question}
+        {/* Assignment details */}
+        <section className="mt-5 rounded-2xl bg-[#F8FAFC] p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-[#0f1114]">
+                Assignment details.
+              </h2>
+              <p className="mt-3 text-sm text-[#0f1114]">
+                <span className="font-medium">Attempts:</span> Unlimited.
               </p>
-              <div className="mt-3 space-y-2">
-                {q.options.map((opt, oIdx) => {
-                  const isSelected = answers[qIdx] === oIdx;
-                  const isCorrect = submitted && oIdx === q.correct;
-                  const isWrong = submitted && isSelected && oIdx !== q.correct;
-                  return (
-                    <button
-                      key={oIdx}
-                      onClick={() => handleSelect(qIdx, oIdx)}
-                      className={clsx(
-                        "flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-colors",
-                        isCorrect && "border-[#137333] bg-[#f0faf3]",
-                        isWrong && "border-[#dc2626] bg-[#fef2f2]",
-                        isSelected && !submitted && "border-[#0056d2] bg-[#f0f6ff]",
-                        !isSelected && !isCorrect && !isWrong && "border-[#e3e8ef] hover:border-[#c1cad9]",
-                      )}
-                      disabled={submitted}
-                    >
-                      <div className={clsx(
-                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-                        isSelected || isCorrect ? "border-current" : "border-[#c1cad9]",
-                      )}>
-                        {isSelected && <div className="h-2.5 w-2.5 rounded-full bg-current" />}
-                      </div>
-                      <span>{opt}</span>
-                    </button>
-                  );
-                })}
-              </div>
             </div>
-          ))}
-        </div>
-
-        {!submitted && (
-          <div className="mt-8 flex justify-center">
             <button
-              onClick={handleSubmit}
-              disabled={!allAnswered}
-              className={clsx(
-                "rounded-lg px-8 py-3 text-sm font-semibold text-white transition-colors",
-                allAnswered ? "bg-[#0056d2] hover:bg-[#0048b0]" : "bg-[#c1cad9] cursor-not-allowed",
-              )}
+              onClick={onStart}
+              className="shrink-0 rounded-lg bg-[#0056d2] px-7 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#003e9c]"
             >
-              Submit
+              Start
             </button>
           </div>
-        )}
+        </section>
+
+        {/* Your grade */}
+        <section className="mt-5 rounded-2xl bg-[#F8FAFC] p-6">
+          <h2 className="text-base font-semibold text-[#0f1114]">Your grade.</h2>
+          <p className="mt-2 text-sm text-[#5b6780]">
+            You haven&rsquo;t submitted this yet. We keep your highest score. These grades
+            will not affect your overall skill progress.
+          </p>
+          <p className="mt-3 text-2xl font-bold text-[#5b6780]">--</p>
+        </section>
       </div>
+    </div>
+  );
+}
+
+// ── Success view ─────────────────────────────────────────────────────────────
+
+function SuccessView({
+  item,
+  targetSkillIds,
+  roleProgress,
+  onBack,
+  onNext,
+}: {
+  item: LexItem;
+  targetSkillIds: string[];
+  roleProgress: RoleProgress | null;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  // Distribute the item's XP across its target skills using the same rule that
+  // actually awards XP to roleProgress, so the displayed numbers match what's
+  // recorded in the skill store.
+  const skillXpMap = distributeXpToSkills(item.xpValue, targetSkillIds);
+
+  // Build skill-card data using either the role progress (if available) or
+  // a synthetic baseline from the role catalog.
+  const role = roleProgress ? findRoleById(roleProgress.roleId) : null;
+  const skillCards = targetSkillIds
+    .map((skillId) => {
+      const xpDelta = skillXpMap[skillId] ?? 0;
+      const fromProgress = roleProgress?.skills[skillId];
+      const skillName =
+        fromProgress?.skillName ??
+        role?.skills.find((s) => s.id === skillId)?.name ??
+        skillId;
+      const xpMax =
+        fromProgress?.xpMax ??
+        (role?.skills.find((s) => s.id === skillId)?.xpMax ?? EXPRESSION_XP_MAX);
+      const currentXp = fromProgress?.currentXp ?? xpDelta;
+      return {
+        skillId,
+        skillName,
+        xpDelta,
+        currentXp,
+        xpMax,
+      };
+    })
+    .filter((c) => c.xpDelta > 0);
+
+  return (
+    <div className="flex h-full w-full flex-1 flex-col overflow-y-auto bg-white">
+      {/* Top toolbar — Back + title + Close */}
+      <div className="flex items-center justify-between gap-4 px-6 py-4">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-sm font-semibold text-[#0056d2] transition-colors hover:text-[#003e9c]"
+        >
+          <ArrowLeft size={18} strokeWidth={2} />
+          Back
+        </button>
+        <div className="flex-1 text-center">
+          <p className="text-sm font-semibold text-[#0f1114]">{item.title}</p>
+          <p className="text-xs text-[#5b6780]">
+            {item.type === "graded" ? "Graded Assignment" : "Practice Assignment"}
+            {item.type !== "graded" && ` · ${item.durationMinutes} min`}
+          </p>
+        </div>
+        <button
+          onClick={onNext}
+          aria-label="Close and continue"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-[#5b6780] transition-colors hover:bg-[#e3e8ef] hover:text-[#0f1114]"
+        >
+          <X size={20} strokeWidth={2} />
+        </button>
+      </div>
+
+      {/* Hero — gradient bg with congratulations + Next item */}
+      <section
+        className="relative overflow-hidden border-b border-[#dae1ed] px-10 py-10"
+        style={{
+          background:
+            "linear-gradient(180deg, #EAF6E8 0%, #F0F8EE 60%, #F5FAF3 100%)",
+        }}
+      >
+        <h1 className="text-[44px] font-bold leading-[52px] tracking-tight text-[#0f1114]">
+          You passed!
+          <br />
+          Great job on this.
+        </h1>
+        <p className="mt-2 text-base text-[#0f1114]">Grade received 100%</p>
+        <button
+          onClick={onNext}
+          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#0056d2] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#003e9c]"
+        >
+          Next item
+          <ArrowRight size={16} strokeWidth={2} />
+        </button>
+      </section>
+
+      {/* Skill progress cards */}
+      {skillCards.length > 0 && (
+        <section className="px-10 pb-12 pt-8">
+          <div className="mb-5 flex items-center justify-center gap-2">
+            <h2 className="text-sm font-medium text-[#5b6780]">
+              Skill progress from this assignment
+            </h2>
+            <span className="rounded bg-[#0f1114] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+              Beta
+            </span>
+          </div>
+          <div className="mx-auto grid max-w-[820px] grid-cols-1 gap-4 sm:grid-cols-2">
+            {skillCards.map((c) => {
+              const pct = Math.min(100, Math.round((c.currentXp / c.xpMax) * 100));
+              return (
+                <div
+                  key={c.skillId}
+                  className="rounded-xl border border-[#e3e8ef] bg-[#f8fafc] p-4"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-[#0f1114]">
+                      {c.skillName}
+                    </h3>
+                    <span className="text-sm font-bold text-[#946100]">
+                      +{c.xpDelta}
+                    </span>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#e3e8ef]">
+                    <div
+                      className="h-full rounded-full bg-[#137333] transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs font-medium text-[#5b6780]">
+                    {c.currentXp}/{c.xpMax} XP
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

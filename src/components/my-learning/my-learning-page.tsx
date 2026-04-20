@@ -47,6 +47,8 @@ interface MyLearningPageProps {
   onUpgrade?: () => void;
   /** Trigger conversational onboarding (used by C+ "Set up your plan" CTA) */
   onStartPlanSetup?: (message?: string) => void;
+  /** Resume the seeded "Continue learning" course on the My Plan tab (returning learners). */
+  onResumeSeededCourse?: () => void;
   onSend: (text: string) => void;
   onRetry: () => void;
   onRemoveCourse: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
@@ -106,6 +108,7 @@ export function MyLearningPage({
   onConfirmInferredRole,
   onUpgrade,
   onStartPlanSetup,
+  onResumeSeededCourse,
   onSend,
   onRetry,
   onRemoveCourse,
@@ -261,6 +264,7 @@ export function MyLearningPage({
                 inferredRoleTitle={inferredRoleTitle}
                 onUpgrade={onUpgrade}
                 onStartPlanSetup={onStartPlanSetup}
+                onResumeSeededCourse={onResumeSeededCourse}
               />
             )}
             {activeTab === "skills" && (

@@ -48,163 +48,234 @@ export const DEFAULT_DAILY_GOALS: DailyGoal[] = [
   { id: "coach", label: "Use Coach", target: 1, icon: "coach" },
 ];
 
-// ── Deterministic seeded random ───────────────────────────────────────────
+// ── M1 "Share Data Through the Art of Visualization" syllabus ────────────
+//
+// Mirrors the structure of https://m1-skills-prototype-nine.vercel.app/learning.html
+// so the LEX prototype shows realistic Coursera course content. Module 1 is fully
+// populated (matches M1 1:1); Modules 2-4 keep their lesson-group headers with a
+// handful of representative items each.
 
-function seededRandom(seed: string): () => number {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) {
-    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-  }
-  return () => {
-    h = (h + 0x6d2b79f5) | 0;
-    let t = Math.imul(h ^ (h >>> 15), 1 | h);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+const M1_COURSE_TITLE = "Share Data Through the Art of Visualization";
 
-// ── Mock Syllabus Generator ───────────────────────────────────────────────
+type SeedItem = { title: string; type: LexItemType; durationMinutes: number };
 
-const VIDEO_TITLES = [
-  "Introduction to {skill}",
-  "Understanding {skill} concepts",
-  "Working with {skill} in practice",
-  "{skill}: Core techniques",
-  "Applying {skill} to real problems",
-  "Deep dive into {skill}",
-  "{skill} best practices",
-  "Advanced {skill} methods",
+const M1_MODULES: Array<{
+  number: number;
+  name: string;
+  groups: Array<{ name: string; items: SeedItem[] }>;
+}> = [
+  {
+    number: 1,
+    name: "Visualize data",
+    groups: [
+      {
+        name: "Communicate data insights",
+        items: [
+          { title: "Introduction to communicating data insights", type: "video", durationMinutes: 3 },
+          { title: "Course 6 overview", type: "reading", durationMinutes: 8 },
+          { title: "Kevin: The power's in the data viz", type: "video", durationMinutes: 2 },
+          { title: "Helpful resources and tips", type: "reading", durationMinutes: 4 },
+        ],
+      },
+      {
+        name: "Understand data visualization",
+        items: [
+          { title: "Why data visualization matters", type: "video", durationMinutes: 6 },
+          { title: "Effective data visualizations", type: "reading", durationMinutes: 8 },
+          { title: "Connect images with data", type: "video", durationMinutes: 6 },
+          { title: "The beauty of visualizing", type: "reading", durationMinutes: 8 },
+          { title: "A recipe for a powerful visualization", type: "video", durationMinutes: 5 },
+          { title: "Correlation and causation", type: "reading", durationMinutes: 8 },
+          { title: "Dynamic visualizations", type: "video", durationMinutes: 3 },
+          { title: "The wonderful world of visualizations", type: "reading", durationMinutes: 8 },
+          { title: "Data grows on decision trees", type: "reading", durationMinutes: 8 },
+          { title: "Self-Reflection: Choose your visualization type", type: "practice", durationMinutes: 20 },
+          { title: "Test your knowledge on data visualizations", type: "practice", durationMinutes: 8 },
+        ],
+      },
+      {
+        name: "Design data visualizations",
+        items: [
+          { title: "Elements of art", type: "video", durationMinutes: 4 },
+          { title: "Principles of design", type: "reading", durationMinutes: 8 },
+          { title: "Data visualization impact", type: "video", durationMinutes: 5 },
+          { title: "Data is beautiful", type: "reading", durationMinutes: 8 },
+          { title: "Design thinking and visualizations", type: "video", durationMinutes: 6 },
+          { title: "[Optional] Design thinking for visualization improvement", type: "reading", durationMinutes: 8 },
+          { title: "Test your knowledge on designing data visualizations", type: "practice", durationMinutes: 8 },
+        ],
+      },
+      {
+        name: "Visualization considerations",
+        items: [
+          { title: "Pro tips for highlighting key information", type: "reading", durationMinutes: 8 },
+          { title: "Accessible visualizations", type: "video", durationMinutes: 4 },
+          { title: "Andrew: Making data accessible", type: "video", durationMinutes: 2 },
+          { title: "Design a chart in 60 minutes", type: "reading", durationMinutes: 4 },
+          { title: "Hands-On Activity: Create your own visualization", type: "practice", durationMinutes: 60 },
+          { title: "Test your knowledge on exploring data visualizations", type: "practice", durationMinutes: 8 },
+        ],
+      },
+      {
+        name: "Module 1 challenge",
+        items: [
+          { title: "Glossary terms from module 1", type: "reading", durationMinutes: 2 },
+          { title: "Module 1 challenge", type: "graded", durationMinutes: 30 },
+        ],
+      },
+    ],
+  },
+  {
+    number: 2,
+    name: "Create data visualizations with Tableau",
+    groups: [
+      {
+        name: "Get started with Tableau",
+        items: [
+          { title: "Data visualizations with Tableau", type: "video", durationMinutes: 1 },
+          { title: "Tableau Public and other online tools", type: "video", durationMinutes: 2 },
+          { title: "Begin to use Tableau Public", type: "reading", durationMinutes: 8 },
+          { title: "Meet Tableau", type: "video", durationMinutes: 9 },
+          { title: "Visualizations in spreadsheets and Tableau", type: "reading", durationMinutes: 8 },
+        ],
+      },
+      {
+        name: "Design visualizations in Tableau",
+        items: [
+          { title: "Create a data visualization in Tableau", type: "video", durationMinutes: 5 },
+          { title: "Hands-On Activity: Create a data visualization in Tableau", type: "practice", durationMinutes: 60 },
+          { title: "Optimize the color palette in data visualization", type: "video", durationMinutes: 3 },
+          { title: "Essential design principles", type: "reading", durationMinutes: 8 },
+        ],
+      },
+      {
+        name: "Optional: Work with multiple data sources",
+        items: [
+          { title: "Optional: Using Tableau Desktop", type: "reading", durationMinutes: 8 },
+        ],
+      },
+      {
+        name: "Module 2 challenge",
+        items: [
+          { title: "Module 2 challenge", type: "graded", durationMinutes: 30 },
+        ],
+      },
+    ],
+  },
+  {
+    number: 3,
+    name: "Craft data stories",
+    groups: [
+      {
+        name: "Data-driven storytelling",
+        items: [
+          { title: "Crafting compelling data narratives", type: "video", durationMinutes: 5 },
+          { title: "The structure of a data story", type: "reading", durationMinutes: 8 },
+        ],
+      },
+      {
+        name: "Tableau dashboards",
+        items: [
+          { title: "Build your first Tableau dashboard", type: "video", durationMinutes: 6 },
+          { title: "Dashboard design best practices", type: "reading", durationMinutes: 8 },
+        ],
+      },
+      {
+        name: "Share data stories",
+        items: [
+          { title: "Publishing and sharing your work", type: "video", durationMinutes: 4 },
+        ],
+      },
+      {
+        name: "Module 3 challenge",
+        items: [
+          { title: "Module 3 challenge", type: "graded", durationMinutes: 30 },
+        ],
+      },
+    ],
+  },
+  {
+    number: 4,
+    name: "Develop presentations and slideshows",
+    groups: [
+      {
+        name: "The art and science of presentations",
+        items: [
+          { title: "Why presentations matter", type: "video", durationMinutes: 4 },
+          { title: "Presentation fundamentals", type: "reading", durationMinutes: 8 },
+        ],
+      },
+      {
+        name: "Presentation skills and practices",
+        items: [
+          { title: "Delivering with confidence", type: "video", durationMinutes: 5 },
+        ],
+      },
+      {
+        name: "Data caveats and limitations",
+        items: [
+          { title: "Acknowledging data limitations", type: "reading", durationMinutes: 6 },
+        ],
+      },
+      {
+        name: "Listen, respond, and include",
+        items: [
+          { title: "Q&A and stakeholder engagement", type: "video", durationMinutes: 5 },
+        ],
+      },
+      {
+        name: "Module 4 challenge",
+        items: [
+          { title: "Module 4 challenge", type: "graded", durationMinutes: 30 },
+        ],
+      },
+      {
+        name: "Course wrap-up",
+        items: [
+          { title: "Course wrap-up", type: "video", durationMinutes: 2 },
+        ],
+      },
+    ],
+  },
 ];
 
-const READING_TITLES = [
-  "Key concepts in {skill}",
-  "{skill} reference guide",
-  "Practical tips for {skill}",
-  "Case study: {skill} in action",
-];
+/**
+ * Build the M1-style syllabus. The course's id, partner, and targetSkillIds are
+ * preserved (so XP attribution still works for the learner's role); only the
+ * displayed structure (modules, lesson groups, items) is overridden.
+ */
+function buildM1Syllabus(course: PlanCourse): LexSyllabus {
+  const modules: LexModule[] = M1_MODULES.map((m) => {
+    const lessonGroups: LexLessonGroup[] = m.groups.map((g, gIdx) => ({
+      id: `${course.id}-m${m.number}-g${gIdx + 1}`,
+      title: g.name,
+      items: g.items.map((seed, iIdx) => ({
+        id: `${course.id}-m${m.number}-g${gIdx + 1}-i${iIdx + 1}`,
+        title: seed.title,
+        type: seed.type,
+        durationMinutes: seed.durationMinutes,
+        xpValue: computeItemXp(seed.type, seed.durationMinutes),
+        skillTags: course.skills.length > 0 ? [course.skills[0]] : ["Data Visualization"],
+      })),
+    }));
 
-const PRACTICE_TITLES = [
-  "Practice: {skill} fundamentals",
-  "Hands-on exercise: {skill}",
-  "Lab: Apply {skill} techniques",
-];
-
-const ASSIGNMENT_TITLES = [
-  "Module assessment: {skill}",
-  "Graded quiz: {skill}",
-];
-
-const LESSON_GROUP_NAMES = [
-  "Getting started",
-  "Core concepts",
-  "Working with data",
-  "Building foundations",
-  "Practical applications",
-  "Tools and techniques",
-  "Analysis methods",
-  "Advanced topics",
-  "Review and practice",
-  "Putting it all together",
-];
-
-function pickTitle(titles: string[], skill: string, rand: () => number): string {
-  const template = titles[Math.floor(rand() * titles.length)];
-  return template.replace("{skill}", skill);
-}
-
-function makeItem(
-  id: string,
-  type: LexItemType,
-  skill: string,
-  rand: () => number,
-): LexItem {
-  let durationMinutes: number;
-  let titles: string[];
-  switch (type) {
-    case "video":
-      durationMinutes = [3, 5, 6, 8, 10][Math.floor(rand() * 5)];
-      titles = VIDEO_TITLES;
-      break;
-    case "reading":
-      durationMinutes = [5, 8, 10, 15][Math.floor(rand() * 4)];
-      titles = READING_TITLES;
-      break;
-    case "practice":
-      durationMinutes = [10, 15, 30][Math.floor(rand() * 3)];
-      titles = PRACTICE_TITLES;
-      break;
-    case "graded":
-      durationMinutes = [20, 30, 45][Math.floor(rand() * 3)];
-      titles = ASSIGNMENT_TITLES;
-      break;
-  }
-  return {
-    id,
-    title: pickTitle(titles, skill, rand),
-    type,
-    durationMinutes,
-    xpValue: computeItemXp(type, durationMinutes),
-    skillTags: [skill],
-  };
-}
-
-export function generateSyllabusForCourse(course: PlanCourse): LexSyllabus {
-  const rand = seededRandom(course.id);
-  const skills = course.skills.length > 0 ? course.skills : ["Data Analysis"];
-  const moduleCount = 2 + Math.floor(rand() * 2); // 2-3 modules
-  const modules: LexModule[] = [];
-  let itemCounter = 0;
-
-  for (let m = 0; m < moduleCount; m++) {
-    const groupCount = 2 + Math.floor(rand() * 2); // 2-3 lesson groups
-    const lessonGroups: LexLessonGroup[] = [];
-
-    for (let g = 0; g < groupCount; g++) {
-      const itemCount = 3 + Math.floor(rand() * 2); // 3-4 items
-      const items: LexItem[] = [];
-
-      for (let i = 0; i < itemCount; i++) {
-        const skill = skills[Math.floor(rand() * skills.length)];
-        const isLastItemInLastGroup = g === groupCount - 1 && i === itemCount - 1;
-        const isLastModule = m === moduleCount - 1;
-
-        let type: LexItemType;
-        if (isLastItemInLastGroup && isLastModule) {
-          type = "graded";
-        } else if (isLastItemInLastGroup) {
-          type = "practice";
-        } else {
-          type = rand() < 0.6 ? "video" : "reading";
-        }
-
-        itemCounter++;
-        items.push(
-          makeItem(`${course.id}-item-${itemCounter}`, type, skill, rand),
-        );
-      }
-
-      const groupName = LESSON_GROUP_NAMES[(m * groupCount + g) % LESSON_GROUP_NAMES.length];
-      lessonGroups.push({
-        id: `${course.id}-m${m + 1}-g${g + 1}`,
-        title: groupName,
-        items,
-      });
-    }
-
-    const primarySkill = skills[m % skills.length];
-    modules.push({
-      id: `${course.id}-module-${m + 1}`,
-      title: `Module ${m + 1}`,
-      subtitle: primarySkill,
+    return {
+      id: `${course.id}-module-${m.number}`,
+      title: `Module ${m.number}`,
+      subtitle: m.name,
       lessonGroups,
-    });
-  }
+    };
+  });
 
   return {
     courseId: course.id,
-    courseTitle: course.name,
+    courseTitle: M1_COURSE_TITLE,
     partner: course.partners[0] ?? "Coursera",
     modules,
     targetSkillIds: course.targetSkillIds,
   };
+}
+
+export function generateSyllabusForCourse(course: PlanCourse): LexSyllabus {
+  return buildM1Syllabus(course);
 }

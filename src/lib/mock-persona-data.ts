@@ -1,4 +1,5 @@
 import type { GatheredInfo } from "@/lib/types";
+import type { PlanCourse } from "@/lib/plan-types";
 import { findRoleById } from "@/lib/role-catalog";
 import {
   addSkillXp,
@@ -96,6 +97,33 @@ export const RETURNING_NON_CPLUS_RESUME_COURSE: InProgressCourse = {
   rating: 4.8,
   productType: "Professional Certificate",
   progress: 28,
+};
+
+/**
+ * PlanCourse-shaped version of the resume course so the Resume button on
+ * the My Plan tab can hand off to LEX (which expects a PlanCourse).
+ */
+export const RETURNING_RESUME_PLAN_COURSE: PlanCourse = {
+  id: "seeded-google-data-analytics",
+  name: RETURNING_NON_CPLUS_RESUME_COURSE.title,
+  url: "",
+  imageUrl: "",
+  productType: RETURNING_NON_CPLUS_RESUME_COURSE.productType,
+  partners: [RETURNING_NON_CPLUS_RESUME_COURSE.partner],
+  partnerLogos: RETURNING_NON_CPLUS_RESUME_COURSE.partnerLogo
+    ? [RETURNING_NON_CPLUS_RESUME_COURSE.partnerLogo]
+    : [],
+  skills: ["Data Analysis", "SQL", "Spreadsheets", "Data Visualization"],
+  duration: "6 months",
+  productDifficultyLevel: "Beginner",
+  estimatedHours: 240,
+  activityBadges: [],
+  xpValue: 0,
+  targetSkillIds: [
+    "data-acquisition-preparation",
+    "data-analysis-exploration",
+    "data-visualization-reporting",
+  ],
 };
 
 /**

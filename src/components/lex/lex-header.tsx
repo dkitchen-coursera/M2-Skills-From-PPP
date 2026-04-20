@@ -13,15 +13,51 @@ function GlobeIcon({ className }: { className?: string }) {
   );
 }
 
-function StarIcon({ filled, className }: { filled: boolean; className?: string }) {
+function AICoachIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
-        d="M8 1l2.245 4.55L15 6.257l-3.5 3.412.826 4.818L8 12.345 3.674 14.487l.826-4.818L1 6.257l4.755-.707L8 1z"
-        fill={filled ? "#f59e0b" : "none"}
-        stroke={filled ? "#f59e0b" : "#c1cad9"}
-        strokeWidth="1.2"
-        strokeLinejoin="round"
+        d="M12 3l1.4 3.6L17 8l-3.6 1.4L12 13l-1.4-3.6L7 8l3.6-1.4L12 3z"
+        fill="#0056d2"
+      />
+      <path
+        d="M5.5 14l.7 1.8L8 16.5l-1.8.7L5.5 19l-.7-1.8L3 16.5l1.8-.7L5.5 14z"
+        fill="#0056d2"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Daily-goal star — purple when the goal is met, soft grey when pending. Mirrors
+ * M1's progress-tracker dot but with a star glyph.
+ */
+function ProgressStar({ earned, className }: { earned: boolean; className?: string }) {
+  if (earned) {
+    return (
+      <svg
+        className={className}
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M12 16.875L7.9 19.325c-.367.2-.712.163-1.037-.112-.325-.275-.475-.613-.45-1.013l.65-4.575-3.625-3.075c-.3-.267-.4-.567-.3-.9.1-.333.3-.567.6-.7l4.75-.425L10.363 4.25c.167-.367.4-.55.7-.55s.533.183.7.55l1.875 4.45 4.75.4c.3.033.5.267.6.7.1.333 0 .633-.3.9l-3.625 3.075.65 4.575c.025.4-.125.738-.45 1.013-.325.275-.67.312-1.037.112L12 16.875z"
+          fill="#6923de"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12 16.875L7.9 19.325c-.367.2-.712.163-1.037-.112-.325-.275-.475-.613-.45-1.013l.65-4.575-3.625-3.075c-.3-.267-.4-.567-.3-.9.1-.333.3-.567.6-.7l4.75-.425L10.363 4.25c.167-.367.4-.55.7-.55s.533.183.7.55l1.875 4.45 4.75.4c.3.033.5.267.6.7.1.333 0 .633-.3.9l-3.625 3.075.65 4.575c.025.4-.125.738-.45 1.013-.325.275-.67.312-1.037.112L12 16.875z"
+        fill="#C1CAD9"
       />
     </svg>
   );
@@ -30,6 +66,12 @@ function StarIcon({ filled, className }: { filled: boolean; className?: string }
 interface LexHeaderProps {
   completedCount: number;
   dailyGoalTarget: number;
+  /** Total number of daily goals (drives the number of stars rendered). */
+  totalGoals?: number;
+  /** Number of daily goals fully met (drives star fill count). */
+  completedGoals?: number;
+  /** Label of the current/next focus goal — shown in the pill text when set. */
+  currentGoalLabel?: string | null;
   dailyGoalOpen: boolean;
   onToggleDailyGoal: () => void;
   onExit: () => void;
@@ -38,57 +80,95 @@ interface LexHeaderProps {
 export function LexHeader({
   completedCount,
   dailyGoalTarget,
+  totalGoals = 3,
+  completedGoals = 0,
+  currentGoalLabel,
   dailyGoalOpen,
   onToggleDailyGoal,
   onExit,
 }: LexHeaderProps) {
-  const starsEarned = Math.min(3, Math.floor((completedCount / dailyGoalTarget) * 3));
+  // One star per total daily goal; fill count = number of goals fully met.
+  const starsToShow = totalGoals;
+  const earnedStars = Math.min(starsToShow, completedGoals);
+  // Progress bar reflects the FIRST goal (learning items) so it animates per item.
   const progress = Math.min(100, (completedCount / dailyGoalTarget) * 100);
+  // Pill text: while the first goal is in progress, show "X/Y learning items".
+  // After it's met, surface the next focus goal label.
+  const pillText = completedCount < dailyGoalTarget
+    ? `${completedCount}/${dailyGoalTarget} learning items`
+    : currentGoalLabel ?? `${completedCount}/${dailyGoalTarget} learning items`;
 
   return (
-    <header className="sticky top-0 z-30 flex h-[56px] items-center border-b border-[#dae1ed] bg-white px-4">
+    <header className="relative z-30 flex h-[56px] shrink-0 items-center justify-between bg-[#F2F5FA] px-6 pl-4">
       {/* Left: Coursera logo — clicking exits LEX */}
-      <button onClick={onExit} className="shrink-0 cursor-pointer">
-        <CourseraLogo className="h-5" />
+      <button
+        onClick={onExit}
+        className="flex shrink-0 cursor-pointer items-center"
+        aria-label="Coursera Home"
+      >
+        <CourseraLogo className="h-4" />
       </button>
 
-      {/* Center: Daily goal tracker */}
-      <div className="mx-auto flex items-center">
+      {/* Center: Daily-goal progress tracker pill */}
+      <div className="absolute left-1/2 z-[1001] -translate-x-1/2">
         <button
           onClick={onToggleDailyGoal}
-          className="flex items-center gap-2 rounded-full border border-[#e3e8ef] bg-[#fafbfc] px-3 py-1.5 transition-colors hover:bg-[#f0f6ff]"
+          className="flex h-9 items-center gap-3 rounded-2xl border border-[#DAE2ED] bg-white px-4 transition-colors hover:bg-[#fafbfc]"
+          aria-expanded={dailyGoalOpen}
+          aria-haspopup="true"
         >
-          <div className="flex items-center gap-0.5">
-            <StarIcon filled={starsEarned >= 1} className="h-4 w-4" />
-            <StarIcon filled={starsEarned >= 2} className="h-4 w-4" />
-            <StarIcon filled={starsEarned >= 3} className="h-4 w-4" />
+          <span className="text-sm leading-5 text-[#0f1114]">
+            {pillText}
+          </span>
+          <div className="h-1 w-[124px] shrink-0 overflow-hidden rounded-full bg-[#DAE2ED]">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${progress}%`,
+                background: "linear-gradient(90deg, #A678F5 0%, #4A0FAB 99%)",
+              }}
+            />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-[#5b6780]">
-              {completedCount}/{dailyGoalTarget} learning items
-            </span>
-            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#e3e8ef]">
-              <div
-                className="h-full rounded-full bg-[#f59e0b] transition-all duration-500"
-                style={{ width: `${progress}%` }}
+          <div className="h-5 w-px shrink-0 self-center bg-[#DAE2ED]" />
+          <div className="flex items-center gap-1">
+            {Array.from({ length: starsToShow }).map((_, i) => (
+              <ProgressStar
+                key={i}
+                earned={i < earnedStars}
+                className="h-5 w-5"
               />
-            </div>
+            ))}
           </div>
           <ChevronDown
-            size={14}
-            className={`text-[#5b6780] transition-transform duration-200 ${dailyGoalOpen ? "rotate-180" : ""}`}
+            size={20}
+            strokeWidth={2}
+            className={`shrink-0 text-[#5b6780] transition-transform duration-200 ${
+              dailyGoalOpen ? "rotate-180" : ""
+            }`}
           />
         </button>
       </div>
 
-      {/* Right: Globe + Avatar */}
-      <div className="flex shrink-0 items-center gap-2">
-        <button className="flex h-8 w-8 items-center justify-center text-[#5b6780] hover:text-[#0f1114]">
-          <GlobeIcon className="h-5 w-5" />
+      {/* Right: Language + AI Coach + Avatar */}
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          className="flex h-10 w-10 items-center justify-center rounded-md text-[#5b6780] transition-colors hover:bg-[#e3e8ef] hover:text-[#0f1114]"
+          aria-label="Language"
+        >
+          <GlobeIcon className="h-6 w-6" />
         </button>
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0056d2] text-xs font-semibold text-white">
+        <button
+          className="flex h-10 w-10 items-center justify-center rounded-md transition-colors hover:bg-[#e3e8ef]"
+          aria-label="AI Coach"
+        >
+          <AICoachIcon className="h-7 w-7" />
+        </button>
+        <button
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0056d2] text-sm font-semibold text-white"
+          aria-label="Account"
+        >
           L
-        </div>
+        </button>
       </div>
     </header>
   );

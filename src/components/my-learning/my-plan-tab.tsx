@@ -26,6 +26,8 @@ interface MyPlanTabProps {
   inferredRoleTitle?: string | null;
   onUpgrade?: () => void;
   onStartPlanSetup?: (message?: string) => void;
+  /** Resume the seeded "Continue learning" course shown to returning learners (no plan yet). */
+  onResumeSeededCourse?: () => void;
 }
 
 function CompletedMilestone({ name, description }: { name: string; description: string }) {
@@ -58,6 +60,7 @@ export function MyPlanTab({
   inferredRoleTitle,
   onUpgrade,
   onStartPlanSetup,
+  onResumeSeededCourse,
 }: MyPlanTabProps) {
   if (roleProgress?.isMastered && plan) {
     return (
@@ -116,6 +119,7 @@ export function MyPlanTab({
         roleProgress={roleProgress}
         inferredRoleTitle={inferredRoleTitle ?? null}
         onUpgrade={onUpgrade}
+        onResume={onResumeSeededCourse}
       />
     );
   }
@@ -126,6 +130,7 @@ export function MyPlanTab({
       <ReturningPlanView
         roleProgress={roleProgress}
         inferredRoleTitle={inferredRoleTitle}
+        onResume={onResumeSeededCourse}
         topCta={
           <div className="rounded-2xl border border-[#dae1ed] bg-gradient-to-br from-[#f0f6ff] to-white p-6 shadow-[0_1px_2px_rgba(15,17,20,0.04)]">
             <div className="flex items-start gap-4">

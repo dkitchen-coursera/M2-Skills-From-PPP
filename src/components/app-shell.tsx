@@ -19,6 +19,7 @@ import {
   IN_PROGRESS_GATHERED_INFO,
   RETURNING_INFERRED_ROLE_ID,
   RETURNING_IN_PROGRESS_COURSES,
+  RETURNING_RESUME_PLAN_COURSE,
   createReturningLearnerProgress,
 } from "@/lib/mock-persona-data";
 import type { LearningPlan, PlanCourse } from "@/lib/plan-types";
@@ -1022,6 +1023,7 @@ export function AppShell() {
           onConfirmInferredRole={handleConfirmInferredRole}
           onUpgrade={handleStartUpgrade}
           onStartPlanSetup={handleStartPlanSetup}
+          onResumeSeededCourse={() => handleResumeCourse(RETURNING_RESUME_PLAN_COURSE)}
           onSend={handleSend}
           onRetry={handleRetry}
           onRemoveCourse={handleRemoveCourse}

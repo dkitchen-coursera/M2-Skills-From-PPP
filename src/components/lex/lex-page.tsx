@@ -12,6 +12,7 @@ import { LexContentArea } from "./lex-content-area";
 import { SkillProgressModal } from "./skill-progress-modal";
 import { LexVideoEndModal } from "./lex-video-end-modal";
 import { LexModuleCompleteModal } from "./lex-module-complete-modal";
+import { LexGoalToast } from "./lex-goal-toast";
 
 type ModalState =
   | { type: "none" }
@@ -198,20 +199,19 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
     const xpMap = distributeXpToSkills(activeItem.xpValue, syllabus.targetSkillIds);
     onXpEarned(xpMap);
 
-    if (activeItem.type === "video") {
-      const nextItem = findNextItem(activeItem.id);
-      setModalState({ type: "video-end", item: activeItem, nextItem });
-    } else if (isLastItemInModule(activeItem.id)) {
-      const module = findModuleForItem(activeItem.id);
-      if (module) {
-        setModalState({ type: "module-complete", module });
-      } else {
-        advanceToNext(activeItem.id);
-      }
-    } else {
-      advanceToNext(activeItem.id);
+    // Practice/graded items render their own success state with a Next button —
+    // skip auto-advancement so the success view stays visible until the learner clicks Next.
+    if (activeItem.type === "practice" || activeItem.type === "graded") {
+      return;
     }
-  }, [activeItem, completedItemIds, syllabus.targetSkillIds, onXpEarned, findNextItem, isLastItemInModule, findModuleForItem]);
+
+    // All item types now defer advancement to the user's explicit "Next item" click.
+    // - video → inline "Keep up the good work!" overlay
+    // - reading → "Mark as complete" → "Go to next item"
+    // - practice/graded → success-state screen with Next item CTA
+    // The parent only handles XP recording here; advancement happens via the
+    // onNext callback wired through LexContentArea.
+  }, [activeItem, completedItemIds, syllabus.targetSkillIds, onXpEarned]);
 
   function advanceToNext(currentId: string) {
     const next = allItems.find((item) => {
@@ -251,13 +251,63 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
     }
   }, [activeItem, allItems, completedItemIds, onCourseComplete]);
 
-  const totalItemsCompleted = itemsCompleted + completedItemIds.size;
+  // completedItemIds is the authoritative source — it gets +1 per single completion
+  // and +N per batched proto-trigger. The parent's `itemsCompleted` (from XP-earned events)
+  // would double-count for single completions and undercount for batch triggers.
+  const totalItemsCompleted = completedItemIds.size;
+
+  // ── Daily-goal completion toast ──────────────────────────────────────────
+  // Track which goals are met so we can fire a celebratory toast on each transition
+  // from unmet → met. Heading + body are tailored to the goal completed.
+  const [toast, setToast] = useState<{ heading: string; body: string; key: number } | null>(null);
+  const [metGoalIds, setMetGoalIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const goalProgress: Record<string, number> = {
+      "learning-items": totalItemsCompleted,
+      practice: practiceCompleted,
+      coach: 0,
+    };
+
+    for (const goal of DEFAULT_DAILY_GOALS) {
+      const current = goalProgress[goal.id] ?? 0;
+      const isMet = current >= goal.target;
+      if (isMet && !metGoalIds.has(goal.id)) {
+        // Transition unmet → met: fire toast
+        let heading = "High five!";
+        let body = `You've completed a daily goal — ${goal.label.toLowerCase()}.`;
+        if (goal.id === "learning-items") {
+          heading = "High five!";
+          body = `You've completed a daily goal by finishing ${goal.target} learning items.`;
+        } else if (goal.id === "practice") {
+          heading = "Nice work!";
+          body = "You've completed a daily goal by finishing a practice item.";
+        } else if (goal.id === "coach") {
+          heading = "Great move!";
+          body = "You've completed a daily goal by using Coach.";
+        }
+        setToast({ heading, body, key: Date.now() });
+        setMetGoalIds((prev) => {
+          const next = new Set(prev);
+          next.add(goal.id);
+          return next;
+        });
+        // Only fire one toast per render cycle so multiple simultaneous completions don't overlap
+        break;
+      }
+    }
+  }, [totalItemsCompleted, practiceCompleted, metGoalIds]);
 
   return (
-    <div className="flex h-screen flex-col bg-white">
+    <div className="flex h-screen flex-col bg-[#F2F5FA]">
       <LexHeader
         completedCount={totalItemsCompleted}
         dailyGoalTarget={DEFAULT_DAILY_GOALS[0].target}
+        totalGoals={DEFAULT_DAILY_GOALS.length}
+        completedGoals={metGoalIds.size}
+        currentGoalLabel={
+          DEFAULT_DAILY_GOALS.find((g) => !metGoalIds.has(g.id))?.label ?? null
+        }
         dailyGoalOpen={dailyGoalOpen}
         onToggleDailyGoal={() => setDailyGoalOpen((prev) => !prev)}
         onExit={onExit}
@@ -275,8 +325,15 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
         </>
       )}
 
-      {/* Main layout */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Daily-goal completion toast */}
+      <LexGoalToast
+        heading={toast?.heading ?? ""}
+        body={toast?.body ?? ""}
+        triggerKey={toast?.key ?? null}
+      />
+
+      {/* Main layout — sidebar + content as rounded white cards on light grey bg */}
+      <div className="flex flex-1 gap-4 overflow-hidden bg-[#F2F5FA] px-4 pb-4">
         <LexSidebar
           syllabus={syllabus}
           activeItemId={activeItemId}
@@ -285,7 +342,26 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
           onSelectItem={setActiveItemId}
           onOpenSkillProgress={() => setModalState({ type: "skill-progress" })}
         />
-        <LexContentArea item={activeItem} onComplete={handleItemComplete} />
+        <div className="flex flex-1 overflow-hidden rounded-2xl bg-white">
+          <LexContentArea
+            item={activeItem}
+            nextItem={activeItem ? findNextItem(activeItem.id) : null}
+            targetSkillIds={syllabus.targetSkillIds}
+            roleProgress={roleProgress}
+            onComplete={handleItemComplete}
+            onNext={() => {
+              if (!activeItem) return;
+              if (isLastItemInModule(activeItem.id)) {
+                const module = findModuleForItem(activeItem.id);
+                if (module) {
+                  setModalState({ type: "module-complete", module });
+                  return;
+                }
+              }
+              advanceToNext(activeItem.id);
+            }}
+          />
+        </div>
       </div>
 
       {/* Modals */}
