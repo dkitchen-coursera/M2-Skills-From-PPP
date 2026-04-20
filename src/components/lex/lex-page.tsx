@@ -45,6 +45,7 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
   const [sessionXp, setSessionXp] = useState(0);
   const [dailyGoalOpen, setDailyGoalOpen] = useState(false);
   const [practiceCompleted, setPracticeCompleted] = useState(0);
+  const [gradedCompleted, setGradedCompleted] = useState(0);
 
   const activeItem = useMemo(
     () => allItems.find((item) => item.id === activeItemId) ?? null,
@@ -69,15 +70,15 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
         const next = new Set(prev);
         let addedXp = 0;
         let addedPractice = 0;
+        let addedGraded = 0;
         const aggregatedSkillXp: Record<string, number> = {};
 
         for (const item of moduleItems) {
           if (!next.has(item.id)) {
             next.add(item.id);
             addedXp += item.xpValue;
-            if (item.type === "practice" || item.type === "graded") {
-              addedPractice++;
-            }
+            if (item.type === "practice") addedPractice++;
+            if (item.type === "graded") addedGraded++;
             // Distribute XP to skills
             const xpMap = distributeXpToSkills(item.xpValue, syllabus.targetSkillIds);
             for (const [skillId, xp] of Object.entries(xpMap)) {
@@ -95,6 +96,9 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
         }
         if (addedPractice > 0) {
           setPracticeCompleted((prev) => prev + addedPractice);
+        }
+        if (addedGraded > 0) {
+          setGradedCompleted((prev) => prev + addedGraded);
         }
 
         return next;
@@ -121,15 +125,15 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
         const next = new Set(prev);
         let addedXp = 0;
         let addedPractice = 0;
+        let addedGraded = 0;
         const aggregatedSkillXp: Record<string, number> = {};
 
         for (const item of allItems) {
           if (!next.has(item.id)) {
             next.add(item.id);
             addedXp += item.xpValue;
-            if (item.type === "practice" || item.type === "graded") {
-              addedPractice++;
-            }
+            if (item.type === "practice") addedPractice++;
+            if (item.type === "graded") addedGraded++;
             const xpMap = distributeXpToSkills(item.xpValue, syllabus.targetSkillIds);
             for (const [skillId, xp] of Object.entries(xpMap)) {
               aggregatedSkillXp[skillId] = (aggregatedSkillXp[skillId] ?? 0) + xp;
@@ -145,6 +149,9 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
         }
         if (addedPractice > 0) {
           setPracticeCompleted((prev) => prev + addedPractice);
+        }
+        if (addedGraded > 0) {
+          setGradedCompleted((prev) => prev + addedGraded);
         }
 
         return next;
@@ -192,8 +199,11 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
     setCompletedItemIds((prev) => new Set(prev).add(activeItem.id));
     setSessionXp((prev) => prev + activeItem.xpValue);
 
-    if (activeItem.type === "practice" || activeItem.type === "graded") {
+    if (activeItem.type === "practice") {
       setPracticeCompleted((prev) => prev + 1);
+    }
+    if (activeItem.type === "graded") {
+      setGradedCompleted((prev) => prev + 1);
     }
 
     const xpMap = distributeXpToSkills(activeItem.xpValue, syllabus.targetSkillIds);
@@ -266,7 +276,7 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
     const goalProgress: Record<string, number> = {
       "learning-items": totalItemsCompleted,
       practice: practiceCompleted,
-      coach: 0,
+      graded: gradedCompleted,
     };
 
     for (const goal of DEFAULT_DAILY_GOALS) {
@@ -282,9 +292,9 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
         } else if (goal.id === "practice") {
           heading = "Nice work!";
           body = "You've completed a daily goal by finishing a practice item.";
-        } else if (goal.id === "coach") {
-          heading = "Great move!";
-          body = "You've completed a daily goal by using Coach.";
+        } else if (goal.id === "graded") {
+          heading = "Well done!";
+          body = "You've completed a daily goal by finishing a graded item.";
         }
         setToast({ heading, body, key: Date.now() });
         setMetGoalIds((prev) => {
@@ -296,7 +306,7 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
         break;
       }
     }
-  }, [totalItemsCompleted, practiceCompleted, metGoalIds]);
+  }, [totalItemsCompleted, practiceCompleted, gradedCompleted, metGoalIds]);
 
   return (
     <div className="flex h-screen flex-col bg-[#F2F5FA]">
@@ -321,6 +331,7 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
             goals={DEFAULT_DAILY_GOALS}
             completedItems={totalItemsCompleted}
             completedPractice={practiceCompleted}
+            completedGraded={gradedCompleted}
           />
         </>
       )}

@@ -28,12 +28,19 @@ interface DailyGoalPanelProps {
   goals: DailyGoal[];
   completedItems: number;
   completedPractice: number;
+  completedGraded?: number;
 }
 
-export function DailyGoalPanel({ goals, completedItems, completedPractice }: DailyGoalPanelProps) {
+export function DailyGoalPanel({
+  goals,
+  completedItems,
+  completedPractice,
+  completedGraded = 0,
+}: DailyGoalPanelProps) {
   function getCurrent(goal: DailyGoal): number {
     if (goal.id === "learning-items") return completedItems;
     if (goal.id === "practice") return completedPractice;
+    if (goal.id === "graded") return completedGraded;
     return 0;
   }
 

@@ -34,5 +34,5 @@ export interface DailyGoal {
   id: string;
   label: string;
   target: number;
-  icon: "star" | "practice" | "coach";
+  icon: "star" | "practice" | "coach" | "graded";
 }

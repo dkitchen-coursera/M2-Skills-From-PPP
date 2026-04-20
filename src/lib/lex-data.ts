@@ -45,7 +45,7 @@ export function distributeXpToSkills(
 export const DEFAULT_DAILY_GOALS: DailyGoal[] = [
   { id: "learning-items", label: "Complete any 5 learning items", target: 5, icon: "star" },
   { id: "practice", label: "Complete 1 practice item", target: 1, icon: "practice" },
-  { id: "coach", label: "Use Coach", target: 1, icon: "coach" },
+  { id: "graded", label: "Complete 1 graded item", target: 1, icon: "star" },
 ];
 
 // ── M1 "Share Data Through the Art of Visualization" syllabus ────────────

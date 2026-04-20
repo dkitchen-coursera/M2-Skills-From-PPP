@@ -33,25 +33,20 @@ export function LexReadingContent({ item, onComplete, onNext }: LexReadingConten
   return (
     <div className="flex h-full w-full flex-1 flex-col overflow-y-auto">
       <div className="mx-auto w-full max-w-[820px] px-8 pb-32 pt-8">
-        {/* Title row + Save note */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold leading-8 tracking-tight text-[#0f1114]">
-              {item.title}
-            </h1>
-            <p className="mt-1 text-sm text-[#5b6780]">
-              <span className="font-semibold text-[#946100]">{item.xpValue} XP</span>
-              <span className="mx-1.5">·</span>
-              {skillSubtitle}
-            </p>
-            <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-[#5b6780]">
-              <Clock size={14} strokeWidth={1.75} />
-              {item.durationMinutes} min read
-            </p>
-          </div>
-          <button className="shrink-0 text-sm font-semibold text-[#0056d2] hover:underline">
-            + Save note
-          </button>
+        {/* Title + meta */}
+        <div>
+          <h1 className="text-2xl font-bold leading-8 tracking-tight text-[#0f1114]">
+            {item.title}
+          </h1>
+          <p className="mt-1 text-sm text-[#5b6780]">
+            <span className="font-semibold text-[#946100]">{item.xpValue} XP</span>
+            <span className="mx-1.5">·</span>
+            {skillSubtitle}
+          </p>
+          <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-[#5b6780]">
+            <Clock size={14} strokeWidth={1.75} />
+            {item.durationMinutes} min read
+          </p>
         </div>
 
         {/* Body */}
