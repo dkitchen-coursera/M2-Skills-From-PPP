@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
 import clsx from "clsx";
 import type { LexSyllabus, LexModule, LexItem, LexItemType } from "@/lib/lex-types";
 
@@ -160,9 +160,10 @@ interface LexSidebarProps {
   activeItemId: string | null;
   completedItemIds: Set<string>;
   sessionXp: number;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
   onSelectItem: (itemId: string) => void;
   onOpenSkillProgress: () => void;
-  onClose?: () => void;
 }
 
 export function LexSidebar({
@@ -170,15 +171,39 @@ export function LexSidebar({
   activeItemId,
   completedItemIds,
   sessionXp,
+  collapsed = false,
+  onToggleCollapsed,
   onSelectItem,
   onOpenSkillProgress,
-  onClose,
 }: LexSidebarProps) {
   const activeModuleId = activeItemId
     ? syllabus.modules.find((m) =>
         m.lessonGroups.some((g) => g.items.some((item) => item.id === activeItemId)),
       )?.id
     : syllabus.modules[0]?.id;
+
+  // Collapsed rail — narrow column with menu toggle + centered XP coin
+  if (collapsed) {
+    return (
+      <aside className="flex h-full w-[68px] shrink-0 flex-col items-center rounded-2xl bg-white py-3">
+        <button
+          onClick={onToggleCollapsed}
+          aria-label="Open navigation"
+          className="flex h-10 w-10 items-center justify-center rounded-md text-[#0f1114] transition-colors hover:bg-[#e3e8ef]"
+        >
+          <Menu size={22} strokeWidth={2} />
+        </button>
+        <button
+          onClick={onOpenSkillProgress}
+          aria-label="View Skill Points details"
+          className="mt-3 flex flex-col items-center gap-1 rounded-md px-2 py-2 text-[#946100] transition-colors hover:bg-[#f8f6f0] hover:text-[#7a5000]"
+        >
+          <XpCoinIcon className="h-7 w-7" />
+          <span className="text-xs font-semibold">{sessionXp} XP</span>
+        </button>
+      </aside>
+    );
+  }
 
   return (
     <aside className="flex h-full w-[320px] shrink-0 flex-col rounded-2xl bg-white">
@@ -187,9 +212,9 @@ export function LexSidebar({
         <h2 className="min-w-0 flex-1 text-[20px] font-semibold leading-6 tracking-tight text-[#0f172a]">
           {syllabus.courseTitle}
         </h2>
-        {onClose && (
+        {onToggleCollapsed && (
           <button
-            onClick={onClose}
+            onClick={onToggleCollapsed}
             aria-label="Close navigation"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#5b6780] transition-colors hover:bg-[#e3e8ef] hover:text-[#0f1114]"
           >

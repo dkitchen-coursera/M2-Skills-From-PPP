@@ -46,6 +46,7 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
   const [dailyGoalOpen, setDailyGoalOpen] = useState(false);
   const [practiceCompleted, setPracticeCompleted] = useState(0);
   const [gradedCompleted, setGradedCompleted] = useState(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const activeItem = useMemo(
     () => allItems.find((item) => item.id === activeItemId) ?? null,
@@ -350,6 +351,8 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
           activeItemId={activeItemId}
           completedItemIds={completedItemIds}
           sessionXp={sessionXp}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
           onSelectItem={setActiveItemId}
           onOpenSkillProgress={() => setModalState({ type: "skill-progress" })}
         />
