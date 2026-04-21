@@ -62,6 +62,20 @@ export function ProtoToolsPanel({
             Proto Tools
           </h3>
 
+          {/* Navigation — jump back to the segments selector at any point */}
+          <button
+            onClick={() => {
+              // Hard-route to the selector (no persona param → shows segments screen)
+              window.location.assign("/");
+            }}
+            className="mb-3 flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+          >
+            <span>&larr; Back to segments</span>
+            <span className="text-[10px] uppercase tracking-wide text-gray-400">
+              Reset
+            </span>
+          </button>
+
           {/* Actions */}
           <div className="space-y-2">
             <button
