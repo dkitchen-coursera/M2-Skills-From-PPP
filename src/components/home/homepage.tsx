@@ -4,7 +4,7 @@ import type { RoleProgress } from "@/lib/skills-store";
 import {
   computeOverallMastery,
   computeOverallMasteryGroups,
-  getRoleUnits,
+  getBaseSkillCounts,
   isGroupRoleProgress,
 } from "@/lib/skills-store";
 import { LihpHeader } from "@/components/lihp/lihp-header";
@@ -193,9 +193,8 @@ export function Homepage({
                       <h2 className="text-lg font-semibold text-[#1f1f1f]">{roleTitle} Mastery</h2>
                       <p className="text-sm text-[#5b6780]">
                         {(() => {
-                          const units = getRoleUnits(roleProgress);
-                          const active = units.filter((u) => u.currentXp > 0).length;
-                          return `${active} of ${units.length} skills in progress`;
+                          const { totalSkills, activeSkills } = getBaseSkillCounts(roleProgress);
+                          return `${activeSkills} of ${totalSkills} skills in progress`;
                         })()}
                       </p>
                     </div>

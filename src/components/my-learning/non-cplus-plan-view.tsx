@@ -2,14 +2,17 @@
 
 import type { ReactNode } from "react";
 import type { RoleProgress } from "@/lib/skills-store";
+import type { StackedSkill } from "@/lib/skills-store";
 import {
   computeOverallMastery,
   computeOverallMasteryGroups,
   getRoleUnits,
+  groupProgressBySkill,
   isGroupRoleProgress,
 } from "@/lib/skills-store";
 import { RETURNING_NON_CPLUS_RESUME_COURSE } from "@/lib/mock-persona-data";
 import { UpsellBanner } from "@/components/shared/upsell-banner";
+import { StackedSkillBar } from "@/components/skills/stacked-skill-bar";
 
 interface ReturningPlanViewProps {
   roleProgress: RoleProgress | null;
@@ -83,6 +86,29 @@ function ResumeCourseSection({ onResume }: { onResume?: () => void }) {
   );
 }
 
+function StackedSnapshotRow({ skill }: { skill: StackedSkill }) {
+  const percent =
+    skill.totalXpMax > 0
+      ? Math.round((skill.totalCurrentXp / skill.totalXpMax) * 100)
+      : 0;
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-[#0f1114]">{skill.skillName}</span>
+        <span className="text-xs font-medium text-[#4d5765]">{percent}%</span>
+      </div>
+      <div className="mt-1.5">
+        <StackedSkillBar
+          levels={skill.levels}
+          currentLevel={skill.currentLevel}
+          targetLevel={skill.targetLevel}
+          compact
+        />
+      </div>
+    </div>
+  );
+}
+
 function SkillsSnapshotSection({
   roleProgress,
   inferredRoleTitle,
@@ -90,25 +116,32 @@ function SkillsSnapshotSection({
   roleProgress: RoleProgress | null;
   inferredRoleTitle: string | null;
 }) {
-  // Shape-agnostic: getRoleUnits works for both area-model roles and the
-  // group-model Data Analyst. `computeOverallMastery` only understands area
-  // shape, so dispatch the overall % helper by the progress shape.
   const overallPct = !roleProgress
     ? 0
     : isGroupRoleProgress(roleProgress)
       ? computeOverallMasteryGroups(roleProgress)
       : computeOverallMastery(roleProgress);
-  const topSkills = roleProgress
+
+  // Group-model: stacked bar per base skill. Legacy area-model: single bar
+  // per area. Both paths cap at 4 rows so the snapshot stays compact.
+  const stackedTop: StackedSkill[] =
+    roleProgress && isGroupRoleProgress(roleProgress)
+      ? groupProgressBySkill(roleProgress)
+          .filter((s) => s.totalCurrentXp > 0)
+          .slice(0, 4)
+      : [];
+  const legacyTop = roleProgress && !isGroupRoleProgress(roleProgress)
     ? getRoleUnits(roleProgress)
         .filter((u) => u.currentXp > 0)
         .slice(0, 4)
         .map((u) => ({
           name: u.displayName,
-          percent: Math.round((u.currentXp / u.xpMax) * 100),
+          percent: u.xpMax > 0 ? Math.round((u.currentXp / u.xpMax) * 100) : 0,
         }))
     : [];
 
-  if (topSkills.length === 0) return null;
+  const hasContent = stackedTop.length > 0 || legacyTop.length > 0;
+  if (!hasContent) return null;
 
   return (
     <section className="rounded-2xl border border-[#e3e8ef] bg-white p-6">
@@ -132,9 +165,13 @@ function SkillsSnapshotSection({
       </div>
 
       <div className="mt-5 space-y-4">
-        {topSkills.map((s) => (
-          <MiniSkillBar key={s.name} name={s.name} percent={s.percent} />
-        ))}
+        {stackedTop.length > 0
+          ? stackedTop.map((s) => (
+              <StackedSnapshotRow key={s.skillSlug} skill={s} />
+            ))
+          : legacyTop.map((s) => (
+              <MiniSkillBar key={s.name} name={s.name} percent={s.percent} />
+            ))}
       </div>
     </section>
   );

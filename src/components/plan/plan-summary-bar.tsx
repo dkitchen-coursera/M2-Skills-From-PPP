@@ -2,7 +2,7 @@ import type { RoleProgress } from "@/lib/skills-store";
 import {
   computeOverallMastery,
   computeOverallMasteryGroups,
-  getRoleUnits,
+  getBaseSkillCounts,
   isGroupRoleProgress,
 } from "@/lib/skills-store";
 
@@ -22,9 +22,7 @@ export function PlanSummaryBar({
   roleProgress,
 }: PlanSummaryBarProps) {
   if (roleProgress) {
-    // Works for both role shapes: getRoleUnits returns a normalized list.
-    const units = getRoleUnits(roleProgress);
-    const developing = units.filter((u) => u.currentXp > 0).length;
+    const { totalSkills, activeSkills } = getBaseSkillCounts(roleProgress);
     const mastery = isGroupRoleProgress(roleProgress)
       ? computeOverallMasteryGroups(roleProgress)
       : computeOverallMastery(roleProgress);
@@ -32,7 +30,7 @@ export function PlanSummaryBar({
       <div className="text-sm text-[#5b6780]">
         <span className="font-semibold text-[#0f1114]">{role}</span>
         {" \u00b7 "}
-        <span>{developing}/{units.length} skills developing</span>
+        <span>{activeSkills}/{totalSkills} skills developing</span>
         {" \u00b7 "}
         <span className="font-medium text-[var(--cds-color-blue-700)]">{mastery}% mastery</span>
       </div>

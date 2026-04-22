@@ -1,11 +1,16 @@
 "use client";
 
 import { X } from "lucide-react";
-import type { RoleProgress, RoleUnit } from "@/lib/skills-store";
-import { getRoleUnits } from "@/lib/skills-store";
+import type { AnyRoleProgress, RoleUnit, StackedSkill } from "@/lib/skills-store";
+import {
+  getRoleUnits,
+  groupProgressBySkill,
+  isGroupRoleProgress,
+} from "@/lib/skills-store";
+import { StackedSkillBar } from "@/components/skills/stacked-skill-bar";
 
 interface SkillProgressModalProps {
-  roleProgress: RoleProgress | null;
+  roleProgress: AnyRoleProgress | null;
   targetSkillIds: string[];
   onClose: () => void;
 }
@@ -30,19 +35,59 @@ function SkillRow({ unit }: { unit: RoleUnit }) {
   );
 }
 
+function StackedSkillSummaryRow({ skill }: { skill: StackedSkill }) {
+  return (
+    <div className="py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-sm font-medium text-[#0f1114]">{skill.skillName}</span>
+        <span className="shrink-0 text-xs text-[#5b6780]">
+          {skill.totalCurrentXp}/{skill.totalXpMax} XP
+        </span>
+      </div>
+      <div className="mt-2">
+        <StackedSkillBar
+          levels={skill.levels}
+          currentLevel={skill.currentLevel}
+          targetLevel={skill.targetLevel}
+          compact
+        />
+      </div>
+    </div>
+  );
+}
+
 export function SkillProgressModal({ roleProgress, targetSkillIds, onClose }: SkillProgressModalProps) {
   if (!roleProgress) return null;
 
-  // getRoleUnits handles both role shapes (area-model + group-model/DA) and returns
-  // a normalized list of mastery units with consistent display names.
-  const allUnits = getRoleUnits(roleProgress);
-  // Order: target units (in plan) first, then any other units with progress
+  const isGroup = isGroupRoleProgress(roleProgress);
+
+  // For group-model, collapse targets to base-skill slugs so "Foundational SQL"
+  // and "Intermediate SQL" both show as one "SQL" row.
+  const targetSlugs = isGroup
+    ? new Set(
+        targetSkillIds
+          .map((id) => roleProgress.groups[id]?.skillSlug)
+          .filter((s): s is string => !!s),
+      )
+    : null;
+
+  // Legacy (area-model) path.
   const targetSet = new Set(targetSkillIds);
+  const allUnits = isGroup ? [] : getRoleUnits(roleProgress);
   const targetUnits = allUnits.filter((u) => targetSet.has(u.key));
   const otherWithProgress = allUnits.filter(
     (u) => !targetSet.has(u.key) && u.currentXp > 0,
   );
   const orderedSkills = [...targetUnits, ...otherWithProgress];
+
+  // Group-model path: stacked skills, target skills first, then others with progress.
+  const stacked = isGroup ? groupProgressBySkill(roleProgress) : [];
+  const targetStacked = stacked.filter((s) => targetSlugs!.has(s.skillSlug));
+  const otherStacked = stacked.filter(
+    (s) => !targetSlugs!.has(s.skillSlug) && s.totalCurrentXp > 0,
+  );
+  const orderedStacked = [...targetStacked, ...otherStacked];
+  const hasContent = isGroup ? orderedStacked.length > 0 : orderedSkills.length > 0;
 
   return (
     <div
@@ -76,10 +121,16 @@ export function SkillProgressModal({ roleProgress, targetSkillIds, onClose }: Sk
 
         {/* Skill list */}
         <div className="flex-1 overflow-y-auto px-6 pt-4">
-          {orderedSkills.length === 0 ? (
+          {!hasContent ? (
             <p className="py-8 text-center text-sm text-[#5b6780]">
               Complete a learning item to start earning skill XP.
             </p>
+          ) : isGroup ? (
+            <div className="divide-y divide-[#f0f2f5]">
+              {orderedStacked.map((skill) => (
+                <StackedSkillSummaryRow key={skill.skillSlug} skill={skill} />
+              ))}
+            </div>
           ) : (
             <div className="divide-y divide-[#f0f2f5]">
               {orderedSkills.map((unit) => (
