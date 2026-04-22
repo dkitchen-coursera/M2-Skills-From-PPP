@@ -1,13 +1,13 @@
 "use client";
 
 import { X } from "lucide-react";
-import type { AnyRoleProgress, RoleUnit, StackedSkill } from "@/lib/skills-store";
+import type { AnyRoleProgress, RoleUnit } from "@/lib/skills-store";
 import {
   getRoleUnits,
   groupProgressBySkill,
   isGroupRoleProgress,
 } from "@/lib/skills-store";
-import { StackedSkillBar } from "@/components/skills/stacked-skill-bar";
+import { StackedSkillRow } from "@/components/skills/stacked-skill-row";
 
 interface SkillProgressModalProps {
   roleProgress: AnyRoleProgress | null;
@@ -29,27 +29,6 @@ function SkillRow({ unit }: { unit: RoleUnit }) {
         <div
           className="h-full rounded-full bg-[#0056d2] transition-all duration-500"
           style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function StackedSkillSummaryRow({ skill }: { skill: StackedSkill }) {
-  return (
-    <div className="py-3">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium text-[#0f1114]">{skill.skillName}</span>
-        <span className="shrink-0 text-xs text-[#5b6780]">
-          {skill.totalCurrentXp}/{skill.totalXpMax} XP
-        </span>
-      </div>
-      <div className="mt-2">
-        <StackedSkillBar
-          levels={skill.levels}
-          currentLevel={skill.currentLevel}
-          targetLevel={skill.targetLevel}
-          compact
         />
       </div>
     </div>
@@ -126,9 +105,13 @@ export function SkillProgressModal({ roleProgress, targetSkillIds, onClose }: Sk
               Complete a learning item to start earning skill XP.
             </p>
           ) : isGroup ? (
-            <div className="divide-y divide-[#f0f2f5]">
+            <div className="space-y-2 pb-2">
               {orderedStacked.map((skill) => (
-                <StackedSkillSummaryRow key={skill.skillSlug} skill={skill} />
+                <StackedSkillRow
+                  key={skill.skillSlug}
+                  skill={skill}
+                  showStar={skill.anyRequired}
+                />
               ))}
             </div>
           ) : (

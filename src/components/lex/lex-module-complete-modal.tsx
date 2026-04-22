@@ -10,7 +10,7 @@ import {
   isGroupRoleProgress,
   lookupRoleUnit,
 } from "@/lib/skills-store";
-import { StackedSkillBar } from "@/components/skills/stacked-skill-bar";
+import { StackedSkillRow } from "@/components/skills/stacked-skill-row";
 
 interface LexModuleCompleteModalProps {
   module: LexModule;
@@ -121,24 +121,13 @@ export function LexModuleCompleteModal({
 
             {/* Skill progress bars */}
             {isGroup && relevantStacked.length > 0 && (
-              <div className="mt-4 space-y-3">
+              <div className="mt-4 space-y-2">
                 {relevantStacked.map((skill) => (
-                  <div key={skill.skillSlug}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-[#0f1114]">{skill.skillName}</span>
-                      <span className="text-xs tabular-nums text-[#5b6780]">
-                        {skill.totalCurrentXp}/{skill.totalXpMax} XP
-                      </span>
-                    </div>
-                    <div className="mt-1.5">
-                      <StackedSkillBar
-                        levels={skill.levels}
-                        currentLevel={skill.currentLevel}
-                        targetLevel={skill.targetLevel}
-                        compact
-                      />
-                    </div>
-                  </div>
+                  <StackedSkillRow
+                    key={skill.skillSlug}
+                    skill={skill}
+                    showStar={skill.anyRequired}
+                  />
                 ))}
               </div>
             )}
