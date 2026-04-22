@@ -4,7 +4,10 @@ import { findRoleById } from "@/lib/role-catalog";
 import {
   addSkillXp,
   createInitialProgress,
+  addGroupXp,
+  createInitialProgressFromGroups,
   type GapAnalysis,
+  type GroupGapAnalysis,
   type RoleProgress,
 } from "@/lib/skills-store";
 
@@ -154,12 +157,40 @@ export const RETURNING_IN_PROGRESS_COURSES: InProgressCourse[] = [
 /**
  * Build a seeded RoleProgress for returning learners — partial XP across
  * a handful of Data Analyst skills, simulating ad-hoc prior learning.
+ *
+ * Data Analyst now uses the group-mastery model. We seed XP against three
+ * visualization-themed Band 1 mastery groups so the returning persona lands
+ * on the My Learning surface with visible progress. For other roles (area-
+ * model), we keep the legacy area-id seed for backward compatibility.
  */
 export function createReturningLearnerProgress(): RoleProgress | null {
   const role = findRoleById(RETURNING_INFERRED_ROLE_ID);
   if (!role) return null;
 
-  // Treat L1 Data Analyst skills as "should", first 3 L2 as "might"
+  if (role.model === "groups" && role.groups) {
+    // Default: Band 1 = should, Band 2 = optional, might empty.
+    const gap: GroupGapAnalysis = {
+      should: role.groups.filter((g) => g.careerBand === 1).map((g) => g.key),
+      might: [],
+      optional: role.groups.filter((g) => g.careerBand === 2).map((g) => g.key),
+    };
+    let progress = createInitialProgressFromGroups({
+      roleId: role.id,
+      roleTitle: role.title,
+      defs: role.groups,
+      gap,
+    });
+    // Seed visualization-themed Band 1 progress (~40-60% each).
+    progress = addGroupXp(progress, "visualization-graphic::foundational", 300);
+    progress = addGroupXp(progress, "data-visualization-software::beginner", 600);
+    progress = addGroupXp(progress, "dashboard::beginner", 450);
+    // Cast through the area-shape declared return type — the app-shell state
+    // is still typed narrow; runtime dispatch via isGroupRoleProgress keeps
+    // correctness. Phase 8 will drop this cast when the state type widens.
+    return progress as unknown as RoleProgress;
+  }
+
+  // Area-model path (unchanged).
   const l1 = role.skills.filter((s) => s.level.includes("Level 1"));
   const l2 = role.skills.filter((s) => s.level.includes("Level 2"));
   const gap: GapAnalysis = {

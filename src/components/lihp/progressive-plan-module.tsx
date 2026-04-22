@@ -2,6 +2,7 @@
 
 import type { GatheredInfo } from "@/lib/types";
 import type { LearningPlan } from "@/lib/plan-types";
+import type { RoleProgress } from "@/lib/skills-store";
 import { SparkleIcon } from "@/components/shared/sparkle-icon";
 import { LearningPlanBanner } from "@/components/lihp/learning-plan-banner";
 
@@ -16,6 +17,8 @@ interface ProgressivePlanModuleProps {
   onRemoveCourse?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreAlternatives?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   completedCourseIds?: Set<string>;
+  startedCourseIds?: Set<string>;
+  roleProgress?: RoleProgress | null;
   onStartPlan?: () => void;
   planStarted?: boolean;
 }
@@ -82,6 +85,8 @@ export function ProgressivePlanModule({
   onRemoveCourse,
   onExploreAlternatives,
   completedCourseIds,
+  startedCourseIds,
+  roleProgress,
   onStartPlan,
   planStarted,
 }: ProgressivePlanModuleProps) {
@@ -120,6 +125,8 @@ export function ProgressivePlanModule({
         swapDisabled={swapDisabled}
         isRefining={isRefining}
         completedCourseIds={completedCourseIds}
+        startedCourseIds={startedCourseIds}
+        roleProgress={roleProgress}
         onRemoveCourse={onRemoveCourse}
         onExploreAlternatives={onExploreAlternatives}
         onStartPlan={onStartPlan}

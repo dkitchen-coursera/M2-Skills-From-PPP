@@ -4,9 +4,9 @@ import { useState } from "react";
 import { ArrowLeft, ArrowRight, Sparkles, X } from "lucide-react";
 import type { LexItem } from "@/lib/lex-types";
 import type { RoleProgress } from "@/lib/skills-store";
-import { EXPRESSION_XP_MAX } from "@/lib/skills-store";
+import { EXPRESSION_XP_MAX, lookupRoleUnit } from "@/lib/skills-store";
 import { findRoleById } from "@/lib/role-catalog";
-import { distributeXpToSkills } from "@/lib/lex-data";
+import { computeItemXpAwards } from "@/lib/lex-data";
 
 interface LexAssignmentContentProps {
   item: LexItem;
@@ -63,18 +63,21 @@ export function LexAssignmentContent({
 // ── Details view ─────────────────────────────────────────────────────────────
 
 function DetailsView({ item, onStart }: { item: LexItem; onStart: () => void }) {
-  const skillSubtitle = item.skillTags[0] ?? "Visualizing and Reporting Clean Data";
+  const skillSubtitle = item.skillTags[0] ?? "";
   return (
     <div className="flex h-full w-full flex-1 flex-col overflow-y-auto px-8 py-8">
       <div className="mx-auto w-full max-w-[820px]">
         <h1 className="text-2xl font-bold leading-8 tracking-tight text-[#0f1114]">
           {item.title}
         </h1>
-        <p className="mt-1 text-sm text-[#5b6780]">
-          <span className="font-semibold text-[#946100]">{item.xpValue} XP</span>
-          <span className="mx-1.5">·</span>
-          {skillSubtitle}
-        </p>
+        {/* XP + skill tag — only shown when the item awards skill XP. */}
+        {skillSubtitle && (
+          <p className="mt-1 text-sm text-[#5b6780]">
+            <span className="font-semibold text-[#946100]">{item.xpValue} XP</span>
+            <span className="mx-1.5">·</span>
+            {skillSubtitle}
+          </p>
+        )}
 
         <p className="mt-6 text-sm font-medium text-[#5b6780]">
           Review Learning Objectives
@@ -154,32 +157,34 @@ function SuccessView({
   onBack: () => void;
   onNext: () => void;
 }) {
-  // Distribute the item's XP across its target skills using the same rule that
-  // actually awards XP to roleProgress, so the displayed numbers match what's
-  // recorded in the skill store.
-  const skillXpMap = distributeXpToSkills(item.xpValue, targetSkillIds);
-
-  // Build skill-card data using either the role progress (if available) or
-  // a synthetic baseline from the role catalog.
+  // Use the same dispatcher the LEX XP pipeline uses, so the displayed XP
+  // deltas match what actually gets recorded. For DA (group-model) this looks
+  // up expression-specific awards from the course sheet; other roles fall
+  // back to an even split over targetSkillIds. Unmapped DA items award nothing.
   const role = roleProgress ? findRoleById(roleProgress.roleId) : null;
-  const skillCards = targetSkillIds
-    .map((skillId) => {
-      const xpDelta = skillXpMap[skillId] ?? 0;
-      const fromProgress = roleProgress?.skills[skillId];
-      const skillName =
-        fromProgress?.skillName ??
-        role?.skills.find((s) => s.id === skillId)?.name ??
-        skillId;
-      const xpMax =
-        fromProgress?.xpMax ??
-        (role?.skills.find((s) => s.id === skillId)?.xpMax ?? EXPRESSION_XP_MAX);
-      const currentXp = fromProgress?.currentXp ?? xpDelta;
+  const skillXpMap = computeItemXpAwards(item, { targetSkillIds, role });
+
+  // Build skill-card data by resolving each awarded key (area id OR group key)
+  // via lookupRoleUnit, which dispatches on role shape.
+  // If skillXpMap is empty the section is hidden — items that don't contribute
+  // to skill mastery have no skill story to tell.
+  const skillCards = Object.entries(skillXpMap)
+    .map(([key, xpDelta]) => {
+      const unit = roleProgress ? lookupRoleUnit(roleProgress, key) : null;
+      const fallbackName =
+        role?.skills.find((s) => s.id === key)?.name ??
+        role?.groups?.find((g) => g.key === key)?.displayName ??
+        key;
+      const groupMatch = role?.groups?.find((g) => g.key === key);
+      const fallbackMax =
+        role?.skills.find((s) => s.id === key)?.xpMax ??
+        (groupMatch ? groupMatch.expressions.length * EXPRESSION_XP_MAX : EXPRESSION_XP_MAX);
       return {
-        skillId,
-        skillName,
+        skillId: key,
+        skillName: unit?.displayName ?? fallbackName,
         xpDelta,
-        currentXp,
-        xpMax,
+        currentXp: unit?.currentXp ?? xpDelta,
+        xpMax: unit?.xpMax ?? fallbackMax,
       };
     })
     .filter((c) => c.xpDelta > 0);

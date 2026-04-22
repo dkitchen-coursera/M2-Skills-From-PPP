@@ -7,10 +7,15 @@
  */
 
 import type { RoleDefinition } from "./role-catalog";
+import type { MasteryGroupDef, MasteryLevel } from "./data/da-mastery-groups";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type SkillLevel =
+/**
+ * Derived 5-state mastery scale, computed from XP percentage. Distinct from
+ * the taxonomy-level ("Beginner", "Intermediate", ...) used by mastery groups.
+ */
+export type MasteryStage =
   | "Not started"
   | "Practicing"
   | "Developing"
@@ -32,7 +37,7 @@ export interface SkillProgress {
   skillName: string;
   currentXp: number; // sum of expression XP
   xpMax: number; // sum of expression xpMax
-  level: SkillLevel;
+  level: MasteryStage;
   priority: SkillPriority;
   expressions: Record<string, ExpressionProgress>;
 }
@@ -59,8 +64,8 @@ export const XP_MAX = 1500;
 
 // ── Functions ──────────────────────────────────────────────────────────────
 
-/** Compute the skill level based on percentage of xpMax reached. */
-export function computeLevel(xp: number, xpMax: number = XP_MAX): SkillLevel {
+/** Compute the derived mastery stage from XP percentage. */
+export function computeStage(xp: number, xpMax: number = XP_MAX): MasteryStage {
   if (xpMax <= 0 || xp <= 0) return "Not started";
   const pct = xp / xpMax;
   if (pct >= 1) return "Mastered";
@@ -68,6 +73,7 @@ export function computeLevel(xp: number, xpMax: number = XP_MAX): SkillLevel {
   if (pct >= 0.25) return "Developing";
   return "Practicing";
 }
+
 
 /** Compute mastery percentage (0–100) for a single skill. */
 export function computeSkillPercent(xp: number, xpMax: number = XP_MAX): number {
@@ -145,7 +151,7 @@ function recomputeAreaFromExpressions(skill: SkillProgress): SkillProgress {
   return {
     ...skill,
     currentXp,
-    level: computeLevel(currentXp, skill.xpMax),
+    level: computeStage(currentXp, skill.xpMax),
   };
 }
 
@@ -274,9 +280,9 @@ export function getSkillsByPriority(progress: RoleProgress): SkillProgress[] {
   );
 }
 
-/** Count skills at each level. */
-export function getSkillLevelCounts(progress: RoleProgress): Record<SkillLevel, number> {
-  const counts: Record<SkillLevel, number> = {
+/** Count skills at each mastery stage. */
+export function getSkillLevelCounts(progress: RoleProgress): Record<MasteryStage, number> {
+  const counts: Record<MasteryStage, number> = {
     "Not started": 0,
     Practicing: 0,
     Developing: 0,
@@ -287,4 +293,391 @@ export function getSkillLevelCounts(progress: RoleProgress): Record<SkillLevel, 
     counts[skill.level]++;
   }
   return counts;
+}
+
+// ── Group-shaped progress ──────────────────────────────────────────────────
+//
+// The new model groups expressions by `{skill × mastery-level}` tuples instead
+// of skill areas. Types and helpers here run in PARALLEL to the area-based
+// ones above — the Data Analyst role migrates to this shape (Phase 3), while
+// other roles stay on the legacy `SkillProgress`/`skills` model for now.
+
+export type { MasteryLevel };
+
+/** Unique id for a mastery group: `${skillSlug}::${level-lowercase}`. */
+export type GroupKey = string;
+
+export interface MasteryGroup {
+  key: GroupKey;
+  skillSlug: string;
+  skillName: string;
+  level: MasteryLevel;
+  /** Precomputed "Intermediate SQL" style label. */
+  displayName: string;
+  /** Data Career Band. Band 1 is required for the DA plan; Band 2 surfaces as "Other". */
+  careerBand: 1 | 2;
+  currentXp: number;
+  xpMax: number;
+  stage: MasteryStage;
+  priority: SkillPriority;
+  expressions: Record<string, ExpressionProgress>;
+}
+
+export interface GroupRoleProgress {
+  model: "groups";
+  roleId: string;
+  roleTitle: string;
+  groups: Record<GroupKey, MasteryGroup>;
+  /** Group keys that count toward plan completion (Band 1 for DA). */
+  requiredGroupKeys: GroupKey[];
+  isMastered: boolean;
+}
+
+/** Distinguish between the legacy area-shape and the new group-shape at runtime. */
+export function isGroupRoleProgress(
+  progress: RoleProgress | GroupRoleProgress | null | undefined,
+): progress is GroupRoleProgress {
+  return !!progress && (progress as GroupRoleProgress).model === "groups";
+}
+
+/** Union of both progress shapes, for state-holding code that must accept either. */
+export type AnyRoleProgress = RoleProgress | GroupRoleProgress;
+
+/**
+ * Build a fresh progress record for any role, dispatching on its `model`.
+ *
+ * The LLM currently emits gap analysis in the legacy area-id space — for
+ * group-model roles we default the gap to "Band 1 = should, Band 2 = optional"
+ * until Phase 5 updates the prompts to emit group keys.
+ */
+export function createInitialProgressForRole(
+  role: RoleDefinition,
+  areaGap: GapAnalysis,
+): AnyRoleProgress {
+  if (role.model === "groups" && role.groups) {
+    const groupGap: GroupGapAnalysis = {
+      should: role.groups.filter((g) => g.careerBand === 1).map((g) => g.key),
+      might: [],
+      optional: role.groups.filter((g) => g.careerBand === 2).map((g) => g.key),
+    };
+    return createInitialProgressFromGroups({
+      roleId: role.id,
+      roleTitle: role.title,
+      defs: role.groups,
+      gap: groupGap,
+    });
+  }
+  return createInitialProgress(role, areaGap);
+}
+
+// ── Group gap analysis ─────────────────────────────────────────────────────
+
+/** Gap analysis over group keys (separate from the area-based `GapAnalysis`). */
+export interface GroupGapAnalysis {
+  should: GroupKey[];
+  might: GroupKey[];
+  optional: GroupKey[];
+}
+
+// ── Group helpers ──────────────────────────────────────────────────────────
+
+function groupPriority(key: GroupKey, gap: GroupGapAnalysis): SkillPriority {
+  if (gap.should.includes(key)) return "should";
+  if (gap.might.includes(key)) return "might";
+  return "optional";
+}
+
+function recomputeGroupFromExpressions(group: MasteryGroup): MasteryGroup {
+  const currentXp = Object.values(group.expressions).reduce(
+    (sum, e) => sum + e.currentXp,
+    0,
+  );
+  return {
+    ...group,
+    currentXp,
+    stage: computeStage(currentXp, group.xpMax),
+  };
+}
+
+/**
+ * Create a fresh GroupRoleProgress from a list of group definitions and a gap
+ * analysis over group keys. Every expression starts at 0 XP.
+ *
+ * `requiredGroupKeys` defaults to the Band 1 subset of `defs` — appropriate
+ * for the Data Analyst career-focused plan. Pass an explicit list to scope
+ * completion differently (e.g. a skills-first plan that targets specific groups).
+ */
+export function createInitialProgressFromGroups(opts: {
+  roleId: string;
+  roleTitle: string;
+  defs: MasteryGroupDef[];
+  gap: GroupGapAnalysis;
+  requiredGroupKeys?: GroupKey[];
+}): GroupRoleProgress {
+  const { roleId, roleTitle, defs, gap } = opts;
+  const groups: Record<GroupKey, MasteryGroup> = {};
+  for (const def of defs) {
+    const expressions: Record<string, ExpressionProgress> = {};
+    for (const expr of def.expressions) {
+      expressions[expr.id] = {
+        expressionId: expr.id,
+        expressionName: expr.name,
+        currentXp: 0,
+      };
+    }
+    const xpMax = def.expressions.length * EXPRESSION_XP_MAX;
+    groups[def.key] = {
+      key: def.key,
+      skillSlug: def.skillSlug,
+      skillName: def.skillName,
+      level: def.level,
+      displayName: def.displayName,
+      careerBand: def.careerBand,
+      currentXp: 0,
+      xpMax,
+      stage: "Not started",
+      priority: groupPriority(def.key, gap),
+      expressions,
+    };
+  }
+  const requiredGroupKeys =
+    opts.requiredGroupKeys ?? defs.filter((d) => d.careerBand === 1).map((d) => d.key);
+  return {
+    model: "groups",
+    roleId,
+    roleTitle,
+    groups,
+    requiredGroupKeys,
+    isMastered: false,
+  };
+}
+
+/**
+ * Distribute XP across the expressions of a group, filling each in order up to
+ * its xpMax. Matches the semantics of `addSkillXp` for the area model.
+ */
+export function addGroupXp(
+  progress: GroupRoleProgress,
+  groupKey: GroupKey,
+  xpEarned: number,
+): GroupRoleProgress {
+  const existing = progress.groups[groupKey];
+  if (!existing || xpEarned <= 0) return progress;
+
+  let remaining = xpEarned;
+  const updatedExpressions = { ...existing.expressions };
+  for (const [id, expr] of Object.entries(updatedExpressions)) {
+    if (remaining <= 0) break;
+    const room = EXPRESSION_XP_MAX - expr.currentXp;
+    if (room <= 0) continue;
+    const add = Math.min(remaining, room);
+    updatedExpressions[id] = { ...expr, currentXp: expr.currentXp + add };
+    remaining -= add;
+  }
+
+  const updated = recomputeGroupFromExpressions({
+    ...existing,
+    expressions: updatedExpressions,
+  });
+  const next: GroupRoleProgress = {
+    ...progress,
+    groups: { ...progress.groups, [groupKey]: updated },
+    isMastered: false,
+  };
+  next.isMastered = checkMasteryGroups(next);
+  return next;
+}
+
+/**
+ * Award XP for a course completion, distributing across multiple groups.
+ * Same signature shape as `completeCourse` but operating on group keys.
+ */
+export function completeCourseByGroups(
+  progress: GroupRoleProgress,
+  groupXpMap: Record<GroupKey, number>,
+): GroupRoleProgress {
+  let updated = progress;
+  for (const [key, xp] of Object.entries(groupXpMap)) {
+    updated = addGroupXp(updated, key, xp);
+  }
+  return updated;
+}
+
+/** All required groups have every expression at xpMax. */
+export function checkMasteryGroups(progress: GroupRoleProgress): boolean {
+  if (progress.requiredGroupKeys.length === 0) return false;
+  for (const key of progress.requiredGroupKeys) {
+    const group = progress.groups[key];
+    if (!group) return false;
+    if (group.currentXp < group.xpMax) return false;
+  }
+  return true;
+}
+
+/** Overall mastery percent across the REQUIRED groups (Band 1 for DA). */
+export function computeOverallMasteryGroups(progress: GroupRoleProgress): number {
+  const required = progress.requiredGroupKeys
+    .map((k) => progress.groups[k])
+    .filter((g): g is MasteryGroup => !!g);
+  if (required.length === 0) return 0;
+  const totalXp = required.reduce((sum, g) => sum + g.currentXp, 0);
+  const maxXp = required.reduce((sum, g) => sum + g.xpMax, 0);
+  if (maxXp === 0) return 0;
+  return Math.round((totalXp / maxXp) * 100);
+}
+
+/** Set every expression in every group to its xpMax — proto-tools demo. */
+export function setAllMasteredGroups(progress: GroupRoleProgress): GroupRoleProgress {
+  const groups: Record<GroupKey, MasteryGroup> = {};
+  for (const [key, group] of Object.entries(progress.groups)) {
+    const expressions: Record<string, ExpressionProgress> = {};
+    for (const [exprId, expr] of Object.entries(group.expressions)) {
+      expressions[exprId] = { ...expr, currentXp: EXPRESSION_XP_MAX };
+    }
+    groups[key] = {
+      ...group,
+      currentXp: group.xpMax,
+      stage: "Mastered",
+      expressions,
+    };
+  }
+  return { ...progress, groups, isMastered: true };
+}
+
+/** Random XP per expression — proto-tools demo for mixed stages. */
+export function setRandomProgressGroups(progress: GroupRoleProgress): GroupRoleProgress {
+  const groups: Record<GroupKey, MasteryGroup> = {};
+  for (const [key, group] of Object.entries(progress.groups)) {
+    const expressions: Record<string, ExpressionProgress> = {};
+    for (const [exprId, expr] of Object.entries(group.expressions)) {
+      expressions[exprId] = {
+        ...expr,
+        currentXp: Math.floor(Math.random() * (EXPRESSION_XP_MAX + 1)),
+      };
+    }
+    groups[key] = recomputeGroupFromExpressions({ ...group, expressions });
+  }
+  const next: GroupRoleProgress = { ...progress, groups, isMastered: false };
+  next.isMastered = checkMasteryGroups(next);
+  return next;
+}
+
+/** Reset every expression to 0 XP. */
+export function resetProgressGroups(progress: GroupRoleProgress): GroupRoleProgress {
+  const groups: Record<GroupKey, MasteryGroup> = {};
+  for (const [key, group] of Object.entries(progress.groups)) {
+    const expressions: Record<string, ExpressionProgress> = {};
+    for (const [exprId, expr] of Object.entries(group.expressions)) {
+      expressions[exprId] = { ...expr, currentXp: 0 };
+    }
+    groups[key] = { ...group, currentXp: 0, stage: "Not started", expressions };
+  }
+  return { ...progress, groups, isMastered: false };
+}
+
+/** Priority order: should → might → optional; then Band 1 before Band 2; then level asc; then displayName. */
+const LEVEL_ORDER: Record<MasteryLevel, number> = {
+  Foundational: 0,
+  Beginner: 1,
+  Intermediate: 2,
+  Advanced: 3,
+};
+
+export function getGroupsByPriority(progress: GroupRoleProgress): MasteryGroup[] {
+  const priorityOrder: Record<SkillPriority, number> = { should: 0, might: 1, optional: 2 };
+  return Object.values(progress.groups).sort((a, b) => {
+    const p = priorityOrder[a.priority] - priorityOrder[b.priority];
+    if (p !== 0) return p;
+    const band = a.careerBand - b.careerBand;
+    if (band !== 0) return band;
+    const lvl = LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level];
+    if (lvl !== 0) return lvl;
+    return a.displayName.localeCompare(b.displayName);
+  });
+}
+
+// ── Shape-agnostic adapter ─────────────────────────────────────────────────
+
+/**
+ * Normalized "unit of mastery" view for UI components that shouldn't care
+ * whether the underlying role uses areas or groups. Returns ONE entry per
+ * skill area (legacy) or per mastery group (new), sorted by priority.
+ */
+export interface RoleUnit {
+  /** Stable id: skill-area id (legacy) or group key (new). */
+  key: string;
+  /** Display label — area name (legacy) or "Intermediate SQL" (new). */
+  displayName: string;
+  currentXp: number;
+  xpMax: number;
+  stage: MasteryStage;
+  priority: SkillPriority;
+  /** Only present on group-shape units. */
+  careerBand?: 1 | 2;
+  /** True when the unit is part of plan completion (required set). */
+  required: boolean;
+}
+
+/**
+ * Look up a single unit of mastery by its key — area id or group key.
+ * Returns null when the key isn't found or when `progress` is null.
+ */
+export function lookupRoleUnit(
+  progress: RoleProgress | GroupRoleProgress | null | undefined,
+  key: string,
+): RoleUnit | null {
+  if (!progress) return null;
+  if (isGroupRoleProgress(progress)) {
+    const g = progress.groups[key];
+    if (!g) return null;
+    return {
+      key: g.key,
+      displayName: g.displayName,
+      currentXp: g.currentXp,
+      xpMax: g.xpMax,
+      stage: g.stage,
+      priority: g.priority,
+      careerBand: g.careerBand,
+      required: progress.requiredGroupKeys.includes(g.key),
+    };
+  }
+  const s = progress.skills[key];
+  if (!s) return null;
+  return {
+    key: s.skillId,
+    displayName: s.skillName,
+    currentXp: s.currentXp,
+    xpMax: s.xpMax,
+    stage: s.level,
+    priority: s.priority,
+    required: s.priority === "should",
+  };
+}
+
+export function getRoleUnits(
+  progress: RoleProgress | GroupRoleProgress | null | undefined,
+): RoleUnit[] {
+  if (!progress) return [];
+  if (isGroupRoleProgress(progress)) {
+    const requiredSet = new Set(progress.requiredGroupKeys);
+    return getGroupsByPriority(progress).map((g) => ({
+      key: g.key,
+      displayName: g.displayName,
+      currentXp: g.currentXp,
+      xpMax: g.xpMax,
+      stage: g.stage,
+      priority: g.priority,
+      careerBand: g.careerBand,
+      required: requiredSet.has(g.key),
+    }));
+  }
+  return getSkillsByPriority(progress).map((s) => ({
+    key: s.skillId,
+    displayName: s.skillName,
+    currentXp: s.currentXp,
+    xpMax: s.xpMax,
+    stage: s.level,
+    priority: s.priority,
+    required: s.priority === "should",
+  }));
 }

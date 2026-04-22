@@ -16,6 +16,7 @@ interface MyPlanTabProps {
   swapDisabled?: boolean;
   roleProgress: RoleProgress | null;
   completedCourseIds?: Set<string>;
+  startedCourseIds?: Set<string>;
   onRemoveCourse: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreAlternatives: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreNextRole?: () => void;
@@ -51,6 +52,7 @@ export function MyPlanTab({
   swapDisabled,
   roleProgress,
   completedCourseIds,
+  startedCourseIds,
   onRemoveCourse,
   onExploreAlternatives,
   onExploreNextRole,
@@ -174,6 +176,8 @@ export function MyPlanTab({
         pendingRemovals={pendingRemovals}
         swapDisabled={swapDisabled}
         completedCourseIds={completedCourseIds}
+        startedCourseIds={startedCourseIds}
+        roleProgress={roleProgress}
         onRemoveCourse={onRemoveCourse}
         onExploreAlternatives={onExploreAlternatives}
         onStartPlan={onStartPlan}

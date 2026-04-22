@@ -1,9 +1,12 @@
 "use client";
 
-import { type RoleProgress } from "@/lib/skills-store";
+import {
+  getRoleUnits,
+  type AnyRoleProgress,
+} from "@/lib/skills-store";
 
 interface RoleMasteryViewProps {
-  progress: RoleProgress;
+  progress: AnyRoleProgress;
   onExploreNext: () => void;
   onReturnToDashboard: () => void;
 }
@@ -13,7 +16,8 @@ export function RoleMasteryView({
   onExploreNext,
   onReturnToDashboard,
 }: RoleMasteryViewProps) {
-  const skills = Object.values(progress.skills);
+  // Works for both role shapes: returns a normalized list with displayNames.
+  const units = getRoleUnits(progress);
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-white px-6">
@@ -57,16 +61,16 @@ export function RoleMasteryView({
 
       {/* Skills checklist */}
       <div className="mb-8 w-full max-w-sm space-y-2">
-        {skills.map((skill) => (
+        {units.map((unit) => (
           <div
-            key={skill.skillId}
+            key={unit.key}
             className="flex items-center gap-3 rounded-lg border border-green-100 bg-[var(--cds-color-green-25)] px-4 py-2.5"
           >
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--cds-color-green-600)] text-white text-xs">
               ✓
             </span>
             <span className="text-sm font-medium text-gray-800">
-              {skill.skillName}
+              {unit.displayName}
             </span>
             <span className="ml-auto text-xs font-semibold text-[var(--cds-color-green-700)]">
               Mastered

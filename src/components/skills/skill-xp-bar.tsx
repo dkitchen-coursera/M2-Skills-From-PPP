@@ -1,16 +1,16 @@
 "use client";
 
-import { computeSkillPercent, XP_MAX, type SkillLevel } from "@/lib/skills-store";
+import { computeSkillPercent, XP_MAX, type MasteryStage } from "@/lib/skills-store";
 
 interface SkillXpBarProps {
   currentXp: number;
-  level: SkillLevel;
+  level: MasteryStage;
   xpMax?: number;
   /** Compact mode for inline use (thinner bar, no label) */
   compact?: boolean;
 }
 
-const LEVEL_COLORS: Record<SkillLevel, string> = {
+const LEVEL_COLORS: Record<MasteryStage, string> = {
   "Not started": "bg-gray-200",
   Practicing: "bg-[var(--cds-color-blue-400)]",
   Developing: "bg-[var(--cds-color-blue-600)]",

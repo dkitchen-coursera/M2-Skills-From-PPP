@@ -7,6 +7,8 @@ import type {
   LexSyllabus,
   DailyGoal,
 } from "@/lib/lex-types";
+import type { RoleDefinition } from "@/lib/role-catalog";
+import { lookupItemXp, expressionXpToGroupXp } from "@/lib/data/da-lex-xp-map";
 
 // ── XP Rules ──────────────────────────────────────────────────────────────
 
@@ -38,6 +40,38 @@ export function distributeXpToSkills(
     result[targetSkillIds[i]] = perSkill + (i === 0 ? remainder : 0);
   }
   return result;
+}
+
+/**
+ * Compute XP awards for a completed LEX item, dispatching on role shape.
+ *
+ * - Group-shape (DA): looks up the item's expression-level awards in the LEX XP
+ *   sheet and folds them onto mastery group keys. An expression shared by
+ *   multiple groups contributes to every owning group. **Items not listed in
+ *   the sheet award 0 skill XP** — no fallback. The learner's session XP
+ *   (displayed on the item cover / daily goal) still accrues via `item.xpValue`,
+ *   but skill mastery bars only move for items with explicit expression mappings.
+ * - Area-shape (other roles): the legacy even-split over `targetSkillIds`.
+ *
+ * The returned keys are either mastery group keys or skill-area ids depending
+ * on shape — the caller should pass the result straight to `completeCourseByGroups`
+ * or `completeCourse` respectively.
+ */
+export function computeItemXpAwards(
+  item: LexItem,
+  opts: {
+    targetSkillIds: string[];
+    role: RoleDefinition | null;
+  },
+): Record<string, number> {
+  const { role, targetSkillIds } = opts;
+  if (role?.model === "groups" && role.groups) {
+    const awards = lookupItemXp(item.title);
+    if (Object.keys(awards).length === 0) return {};
+    const groupsIndex = Object.fromEntries(role.groups.map((g) => [g.key, g]));
+    return expressionXpToGroupXp(awards, groupsIndex);
+  }
+  return distributeXpToSkills(item.xpValue, targetSkillIds);
 }
 
 // ── Daily Goals ───────────────────────────────────────────────────────────
@@ -240,11 +274,50 @@ const M1_MODULES: Array<{
 ];
 
 /**
+ * Compute the tag labels shown on a LEX item (sidebar + end-of-item cards).
+ *
+ * For group-model roles (Data Analyst) each tag is a `{Level} {Skill}` display
+ * name (e.g. "Intermediate SQL"), derived from the mastery groups the item's
+ * XP awards land in.
+ *
+ * **Items not listed in the LEX XP sheet get no skill tag**. Those items
+ * don't award skill XP (see `computeItemXpAwards`), so tagging them with a
+ * mastery group would falsely imply they contribute to that skill. The item
+ * still renders — just without a skill chip or subtitle.
+ *
+ * For area-model roles (legacy) we keep the "first course skill" fallback.
+ */
+function computeItemSkillTags(
+  itemTitle: string,
+  course: PlanCourse,
+  role: RoleDefinition | null,
+): string[] {
+  if (role?.model === "groups" && role.groups) {
+    const awards = lookupItemXp(itemTitle);
+    if (Object.keys(awards).length === 0) return [];
+    const tags = new Set<string>();
+    for (const expressionId of Object.keys(awards)) {
+      for (const group of role.groups) {
+        if (group.expressions.some((e) => e.id === expressionId)) {
+          tags.add(group.displayName);
+        }
+      }
+    }
+    return Array.from(tags);
+  }
+  // Area-model fallback: the first course skill.
+  return course.skills.length > 0 ? [course.skills[0]] : ["Data Visualization"];
+}
+
+/**
  * Build the M1-style syllabus. The course's id, partner, and targetSkillIds are
  * preserved (so XP attribution still works for the learner's role); only the
  * displayed structure (modules, lesson groups, items) is overridden.
+ *
+ * Passing the role lets us tag each item with its actual mastery groups
+ * (e.g. "Intermediate Data Storytelling") instead of a generic course skill.
  */
-function buildM1Syllabus(course: PlanCourse): LexSyllabus {
+function buildM1Syllabus(course: PlanCourse, role: RoleDefinition | null): LexSyllabus {
   const modules: LexModule[] = M1_MODULES.map((m) => {
     const lessonGroups: LexLessonGroup[] = m.groups.map((g, gIdx) => ({
       id: `${course.id}-m${m.number}-g${gIdx + 1}`,
@@ -255,7 +328,7 @@ function buildM1Syllabus(course: PlanCourse): LexSyllabus {
         type: seed.type,
         durationMinutes: seed.durationMinutes,
         xpValue: computeItemXp(seed.type, seed.durationMinutes),
-        skillTags: course.skills.length > 0 ? [course.skills[0]] : ["Data Visualization"],
+        skillTags: computeItemSkillTags(seed.title, course, role),
       })),
     }));
 
@@ -276,6 +349,9 @@ function buildM1Syllabus(course: PlanCourse): LexSyllabus {
   };
 }
 
-export function generateSyllabusForCourse(course: PlanCourse): LexSyllabus {
-  return buildM1Syllabus(course);
+export function generateSyllabusForCourse(
+  course: PlanCourse,
+  role: RoleDefinition | null = null,
+): LexSyllabus {
+  return buildM1Syllabus(course, role);
 }

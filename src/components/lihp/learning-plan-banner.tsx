@@ -4,6 +4,13 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import type { LearningPlan, PlanMilestone, PlanCourse } from "@/lib/plan-types";
+import type { RoleProgress } from "@/lib/skills-store";
+import {
+  computeOverallMastery,
+  computeOverallMasteryGroups,
+  isGroupRoleProgress,
+  lookupRoleUnit,
+} from "@/lib/skills-store";
 import { SparkleIcon } from "@/components/shared/sparkle-icon";
 
 interface LearningPlanBannerProps {
@@ -13,10 +20,24 @@ interface LearningPlanBannerProps {
   swapDisabled?: boolean;
   isRefining?: boolean;
   completedCourseIds?: Set<string>;
+  startedCourseIds?: Set<string>;
+  roleProgress?: RoleProgress | null;
   onRemoveCourse?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreAlternatives?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onStartPlan?: () => void;
   planStarted?: boolean;
+}
+
+// Stable pseudo-random percent for an in-progress course, seeded by course id.
+// Using a hash (not Math.random) avoids re-rolling progress on every render.
+function courseProgressPercent(courseId: string): number {
+  let hash = 0;
+  for (let i = 0; i < courseId.length; i++) {
+    hash = (hash << 5) - hash + courseId.charCodeAt(i);
+    hash |= 0;
+  }
+  // Keep the mock range 15–75% so it reads as "started, not finished"
+  return 15 + (Math.abs(hash) % 61);
 }
 
 function AssignmentCompleteIcon() {
@@ -164,6 +185,7 @@ function ExpandedCourseRow({
   isLast = false,
   isPending = false,
   isCompleted = false,
+  isInProgress = false,
   swapDisabled = false,
   onRemove,
   onExploreAlternatives,
@@ -173,6 +195,7 @@ function ExpandedCourseRow({
   isLast?: boolean;
   isPending?: boolean;
   isCompleted?: boolean;
+  isInProgress?: boolean;
   swapDisabled?: boolean;
   onRemove?: () => void;
   onExploreAlternatives?: () => void;
@@ -188,6 +211,7 @@ function ExpandedCourseRow({
   }
 
   const productLabel = formatProductType(course.productType);
+  const progressPercent = isInProgress ? courseProgressPercent(course.id) : 0;
 
   return (
     <div className={clsx("group flex items-start gap-3 py-3 pl-[40px]", isCompleted && "opacity-70")}>
@@ -231,6 +255,12 @@ function ExpandedCourseRow({
               <>
                 <span>·</span>
                 <span className="font-medium text-[#137333]">Completed</span>
+              </>
+            )}
+            {!isCompleted && isInProgress && (
+              <>
+                <span>·</span>
+                <span className="font-medium text-[#0056d2]">{progressPercent}% complete</span>
               </>
             )}
           </div>
@@ -277,12 +307,132 @@ function parseDescription(description: string): { prefix: string; rest: string }
   return { prefix: match[1] + ":", rest: match[2] };
 }
 
+/** Unified skill-mastery row that handles all three states (mastered / in-progress / not-started). */
+function SkillMasteryRow({
+  skillName,
+  currentXp,
+  xpMax,
+  xpTarget,
+  state,
+}: {
+  skillName: string;
+  currentXp: number;
+  xpMax: number;
+  xpTarget: number;
+  state: "mastered" | "in-progress" | "not-started";
+}) {
+  const percent =
+    state === "mastered"
+      ? 100
+      : xpMax > 0
+        ? Math.min(100, Math.round((currentXp / xpMax) * 100))
+        : 0;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span
+          className={clsx(
+            "text-sm font-semibold",
+            state === "mastered" ? "text-[#137333]" : "text-[#0f1114]",
+          )}
+        >
+          {skillName}
+        </span>
+        <span className="shrink-0 text-xs tabular-nums">
+          {state === "mastered" ? (
+            <span className="inline-flex items-center gap-1 font-semibold text-[#137333]">
+              <svg width="12" height="12" viewBox="0 0 10 10" fill="none" aria-hidden>
+                <circle cx="5" cy="5" r="5" fill="#137333" />
+                <path d="M2.5 5.2l1.8 1.8L7.5 3.8" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Mastered
+            </span>
+          ) : state === "in-progress" ? (
+            <span className="text-[#404b61]">
+              <span className="font-semibold text-[#0056d2]">{percent}%</span>
+              <span className="mx-1 text-[#c1cad9]">·</span>
+              <span>{currentXp}/{xpMax} XP</span>
+            </span>
+          ) : (
+            <span className="text-[#5b6780]">+{xpTarget} XP</span>
+          )}
+        </span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-[#e3e8ef]">
+        <div
+          className={clsx(
+            "h-full rounded-full transition-all duration-500",
+            state === "mastered" ? "bg-[#137333]" : "bg-[#0056d2]",
+          )}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MilestoneStatusBadge({
+  index,
+  status,
+  percent,
+}: {
+  index: number;
+  status: "completed" | "in-progress" | "not-started";
+  percent: number;
+}) {
+  if (status === "completed") {
+    return (
+      <div className="flex h-[25px] w-[25px] shrink-0 items-center justify-center rounded-full bg-[#137333]">
+        <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
+          <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+    );
+  }
+  if (status === "in-progress") {
+    // Circular progress ring around the milestone number
+    const size = 25;
+    const stroke = 2.5;
+    const r = (size - stroke) / 2;
+    const circ = 2 * Math.PI * r;
+    const dashOffset = circ * (1 - percent / 100);
+    return (
+      <div className="relative flex h-[25px] w-[25px] shrink-0 items-center justify-center">
+        <svg className="absolute inset-0 -rotate-90" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+          <circle cx={size / 2} cy={size / 2} r={r} stroke="#dae1ed" strokeWidth={stroke} fill="#f0f6ff" />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke="#0056d2"
+            strokeWidth={stroke}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={circ}
+            strokeDashoffset={dashOffset}
+            style={{ transition: "stroke-dashoffset 400ms ease-out" }}
+          />
+        </svg>
+        <span className="relative text-xs font-semibold text-[#0056d2]">{index}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-[25px] w-[25px] shrink-0 items-center justify-center rounded bg-[#f2f5fa]">
+      <span className="text-xs font-semibold text-[#0f1114]">{index}</span>
+    </div>
+  );
+}
+
 function MilestoneCard({
   milestone,
   index,
   pendingRemovals,
   swapDisabled,
   completedCourseIds,
+  startedCourseIds,
+  roleProgress,
   onRemoveCourse,
   onExploreAlternatives,
 }: {
@@ -291,6 +441,8 @@ function MilestoneCard({
   pendingRemovals?: Set<string>;
   swapDisabled?: boolean;
   completedCourseIds?: Set<string>;
+  startedCourseIds?: Set<string>;
+  roleProgress?: RoleProgress | null;
   onRemoveCourse?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
   onExploreAlternatives?: (courseId: string, courseName: string, milestoneId: string, milestoneName: string) => void;
 }) {
@@ -302,65 +454,128 @@ function MilestoneCard({
   const completedCount = completedCourseIds
     ? milestone.courses.filter((c) => completedCourseIds.has(c.id)).length
     : 0;
-  const allCompleted = completedCount > 0 && completedCount === milestone.courses.length;
+  const inProgressCount = startedCourseIds
+    ? milestone.courses.filter(
+        (c) => startedCourseIds.has(c.id) && !(completedCourseIds?.has(c.id) ?? false),
+      ).length
+    : 0;
+  const totalCourses = milestone.courses.length;
+  const allCoursesComplete = completedCount > 0 && completedCount === totalCourses;
+  const hasActivity = completedCount > 0 || inProgressCount > 0;
+
+  // Target skills for this phase — unified list with per-skill mastery state.
+  // `lookupRoleUnit` handles both area-model (`skills[id]`) and group-model (`groups[key]`)
+  // roles so Data Analyst's group keys resolve correctly.
+  type SkillState = "mastered" | "in-progress" | "not-started";
+  const targetSkillsWithState = milestone.targetSkills.map((ts) => {
+    const unit = lookupRoleUnit(roleProgress, ts.skillId);
+    const currentXp = unit?.currentXp ?? 0;
+    const xpMax = unit?.xpMax ?? 0;
+    let state: SkillState = "not-started";
+    if (xpMax > 0 && currentXp >= xpMax) state = "mastered";
+    else if (currentXp > 0) state = "in-progress";
+    // Prefer the role's display name (e.g. "Intermediate SQL") over what the
+    // plan JSON happens to emit — keeps chip labels canonical.
+    const skillName = unit?.displayName ?? ts.skillName;
+    return { ...ts, skillName, currentXp, xpMax, state };
+  });
+  const masteredSkillsCount = targetSkillsWithState.filter((s) => s.state === "mastered").length;
+  const inProgressSkillsCount = targetSkillsWithState.filter((s) => s.state === "in-progress").length;
+  const allSkillsMastered =
+    targetSkillsWithState.length > 0 &&
+    masteredSkillsCount === targetSkillsWithState.length;
+
+  // Phase mastery percent — averages the target skills' mastery. This is the
+  // "did I achieve the goal of this phase" metric, not raw course count.
+  const phasePercent =
+    targetSkillsWithState.length > 0
+      ? Math.round(
+          targetSkillsWithState.reduce(
+            (sum, s) => sum + (s.xpMax > 0 ? Math.min(1, s.currentXp / s.xpMax) : 0),
+            0,
+          ) / targetSkillsWithState.length * 100,
+        )
+      : allCoursesComplete
+        ? 100
+        : 0;
+
+  // Header treatment: celebrate when the phase's *skills* are all mastered (the real goal),
+  // falling back to all-courses-complete for milestones without target skills.
+  const phaseCelebrated = allSkillsMastered || (targetSkillsWithState.length === 0 && allCoursesComplete);
+  const status: "completed" | "in-progress" | "not-started" = phaseCelebrated
+    ? "completed"
+    : hasActivity || inProgressSkillsCount > 0 || masteredSkillsCount > 0
+      ? "in-progress"
+      : "not-started";
 
   return (
-    <div className={clsx("relative rounded-2xl px-4", allCompleted ? "bg-[#f0faf3]" : "bg-white")}>
+    <div className={clsx("relative rounded-2xl px-4", phaseCelebrated ? "bg-[#f0faf3]" : "bg-white")}>
       {/* Milestone header — always visible */}
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
         className={clsx(
-          "flex w-full items-center gap-3 py-4 text-left",
+          "flex w-full items-start gap-3 py-4 text-left",
           expanded && "border-b border-[#dae1ed]",
         )}
       >
-        {/* Milestone number or checkmark */}
-        {allCompleted ? (
-          <div className="flex h-[25px] w-[25px] shrink-0 items-center justify-center rounded-full bg-[#137333]">
-            <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
-              <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-        ) : (
-          <div className="flex h-[25px] w-[25px] shrink-0 items-center justify-center rounded bg-[#f2f5fa]">
-            <span className="text-xs font-semibold text-[#0f1114]">{index}</span>
-          </div>
-        )}
+        <div className="pt-0.5">
+          <MilestoneStatusBadge index={index} status={status} percent={phasePercent} />
+        </div>
 
         {/* Content */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <p className={clsx("text-base font-semibold tracking-tight", allCompleted ? "text-[#137333]" : "text-[#0f1114]")}>{milestone.name}</p>
-          {/* Description line: bold prefix + regular skills */}
-          {parsed ? (
-            <p className="text-xs text-[#0f1114]">
-              <span className="font-semibold">{parsed.prefix} </span>
-              <span className="font-normal">{parsed.rest}</span>
-            </p>
-          ) : (
-            <p className="text-xs text-[#5b6780]">
-              {milestone.description || milestone.skills.join(", ")}
-            </p>
-          )}
-          {/* Target skills */}
-          {milestone.targetSkills.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              {milestone.targetSkills.map((ts) => (
-                <span key={ts.skillId} className="inline-flex items-center gap-1 rounded-full bg-[#f2f5fa] px-2 py-0.5">
-                  <span className="text-[10px] font-medium text-[#404b61]">{ts.skillName}</span>
-                  <span className="text-[10px] text-[#5b6780]">+{ts.xpTarget} XP</span>
-                </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div>
+            <p className={clsx("text-base font-semibold tracking-tight", phaseCelebrated ? "text-[#137333]" : "text-[#0f1114]")}>{milestone.name}</p>
+            {/* Description line: bold prefix + regular skills */}
+            {parsed ? (
+              <p className="text-xs text-[#0f1114]">
+                <span className="font-semibold">{parsed.prefix} </span>
+                <span className="font-normal">{parsed.rest}</span>
+              </p>
+            ) : (
+              <p className="text-xs text-[#5b6780]">
+                {milestone.description || milestone.skills.join(", ")}
+              </p>
+            )}
+          </div>
+
+          {/* Primary affordance: all target skills for this phase rendered in
+              a single module. Each row shows the skill's mastery state + bar,
+              so it's easy to see the goal of the phase at a glance. */}
+          {targetSkillsWithState.length > 0 && (
+            <div className="flex flex-col gap-3 rounded-xl border border-[#dae1ed] bg-[#f8faff] p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5b6780]">
+                Skill mastery for this phase
+              </p>
+              {targetSkillsWithState.map((s) => (
+                <SkillMasteryRow
+                  key={s.skillId}
+                  skillName={s.skillName}
+                  currentXp={s.currentXp}
+                  xpMax={s.xpMax}
+                  xpTarget={s.xpTarget}
+                  state={s.state}
+                />
               ))}
             </div>
           )}
-          {/* Partner logos + course count (collapsed only) */}
+
+          {/* Partner logos + course count (collapsed only) — secondary to skills now */}
           {!expanded && (
             <div className="flex items-center gap-2">
               <PartnerLogos partners={uniquePartners} partnerLogos={uniqueLogos} />
               <span className="text-xs text-[#5b6780]">
-                {completedCount > 0
-                  ? `${completedCount} of ${milestone.courses.length} completed`
-                  : formatCourseCount(milestone.courses)}
+                {allCoursesComplete
+                  ? `${totalCourses} of ${totalCourses} courses completed`
+                  : completedCount > 0 || inProgressCount > 0
+                    ? [
+                        completedCount > 0 ? `${completedCount} of ${totalCourses} completed` : null,
+                        inProgressCount > 0 ? `${inProgressCount} in progress` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : formatCourseCount(milestone.courses)}
               </span>
             </div>
           )}
@@ -369,38 +584,54 @@ function MilestoneCard({
         {/* Chevron */}
         <ChevronDown
           size={20}
-          className={clsx("shrink-0 text-[#5b6780] transition-transform duration-200", expanded && "rotate-180")}
+          className={clsx("mt-1 shrink-0 text-[#5b6780] transition-transform duration-200", expanded && "rotate-180")}
         />
       </button>
 
       {/* Expanded course list */}
       {expanded && (
         <div>
-          {milestone.courses.map((course, idx) => (
-            <ExpandedCourseRow
-              key={`${milestone.id}-${course.id}`}
-              course={course}
-              milestoneName={milestone.name}
-              isLast={idx === milestone.courses.length - 1}
-              isPending={pendingRemovals?.has(course.id) ?? false}
-              isCompleted={completedCourseIds?.has(course.id) ?? false}
-              swapDisabled={swapDisabled}
-              onRemove={() => onRemoveCourse?.(course.id, course.name, milestone.id, milestone.name)}
-              onExploreAlternatives={() => onExploreAlternatives?.(course.id, course.name, milestone.id, milestone.name)}
-            />
-          ))}
+          {milestone.courses.map((course, idx) => {
+            const isCompleted = completedCourseIds?.has(course.id) ?? false;
+            const isInProgress =
+              (startedCourseIds?.has(course.id) ?? false) && !isCompleted;
+            return (
+              <ExpandedCourseRow
+                key={`${milestone.id}-${course.id}`}
+                course={course}
+                milestoneName={milestone.name}
+                isLast={idx === milestone.courses.length - 1}
+                isPending={pendingRemovals?.has(course.id) ?? false}
+                isCompleted={isCompleted}
+                isInProgress={isInProgress}
+                swapDisabled={swapDisabled}
+                onRemove={() => onRemoveCourse?.(course.id, course.name, milestone.id, milestone.name)}
+                onExploreAlternatives={() => onExploreAlternatives?.(course.id, course.name, milestone.id, milestone.name)}
+              />
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-export function LearningPlanBanner({ plan, onViewPlan, pendingRemovals, swapDisabled, isRefining, completedCourseIds, onRemoveCourse, onExploreAlternatives, onStartPlan, planStarted }: LearningPlanBannerProps) {
+export function LearningPlanBanner({ plan, onViewPlan, pendingRemovals, swapDisabled, isRefining, completedCourseIds, startedCourseIds, roleProgress, onRemoveCourse, onExploreAlternatives, onStartPlan, planStarted }: LearningPlanBannerProps) {
   const totalCourses = plan.milestones.reduce((sum, ms) => sum + ms.courses.length, 0);
   const completedCount = completedCourseIds
     ? plan.milestones.reduce((sum, ms) => sum + ms.courses.filter((c) => completedCourseIds.has(c.id)).length, 0)
     : 0;
-  const hasProgress = completedCount > 0;
+  const inProgressCount = startedCourseIds
+    ? plan.milestones.reduce(
+        (sum, ms) =>
+          sum +
+          ms.courses.filter(
+            (c) => startedCourseIds.has(c.id) && !(completedCourseIds?.has(c.id) ?? false),
+          ).length,
+        0,
+      )
+    : 0;
+  const hasProgress = completedCount > 0 || inProgressCount > 0;
 
   return (
     <div
@@ -439,20 +670,67 @@ export function LearningPlanBanner({ plan, onViewPlan, pendingRemovals, swapDisa
         </button>
       </div>
 
-      {/* Progress bar — shown after at least one course is completed */}
-      {hasProgress && (
-        <div className="mt-3 flex items-center gap-3">
-          <div className="h-2 flex-1 overflow-hidden rounded-full bg-white">
-            <div
-              className="h-full rounded-full bg-[#137333] transition-all duration-500"
-              style={{ width: `${Math.round((completedCount / totalCourses) * 100)}%` }}
-            />
+      {/* Primary progress tracker — skill mastery across the whole plan.
+          Skill mastery is the plan's actual goal; course counts are secondary. */}
+      {(roleProgress || hasProgress) && (() => {
+        // Count unique target skills across all milestones and bucket them by mastery state.
+        const seen = new Set<string>();
+        let skillsInProgress = 0;
+        let skillsMastered = 0;
+        let skillsTotal = 0;
+        for (const ms of plan.milestones) {
+          for (const ts of ms.targetSkills) {
+            if (seen.has(ts.skillId)) continue;
+            seen.add(ts.skillId);
+            skillsTotal += 1;
+            const unit = lookupRoleUnit(roleProgress, ts.skillId);
+            const currentXp = unit?.currentXp ?? 0;
+            const xpMax = unit?.xpMax ?? 0;
+            if (xpMax > 0 && currentXp >= xpMax) skillsMastered += 1;
+            else if (currentXp > 0) skillsInProgress += 1;
+          }
+        }
+        const hasSkillActivity = skillsInProgress > 0 || skillsMastered > 0;
+        // Overall mastery % dispatches on role shape: group-shape uses the required (Band 1)
+        // set; area-shape uses the `should` skills. Both are defined on the same union.
+        const masteryPct = !roleProgress
+          ? 0
+          : isGroupRoleProgress(roleProgress)
+            ? computeOverallMasteryGroups(roleProgress)
+            : computeOverallMastery(roleProgress);
+
+        return (
+          <div className="mt-4 rounded-xl border border-[#dae1ed] bg-white/80 p-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-sm font-semibold text-[#0f1114]">Overall skill mastery</p>
+              <p className="text-sm tabular-nums">
+                <span className="font-semibold text-[#0056d2]">{masteryPct}%</span>
+                <span className="ml-1 text-[#5b6780]">mastered</span>
+              </p>
+            </div>
+            <div className="mt-2 h-3 overflow-hidden rounded-full bg-[#e3e8ef]">
+              <div
+                className="h-full rounded-full bg-[#0056d2] transition-all duration-500"
+                style={{ width: `${masteryPct}%` }}
+              />
+            </div>
+            {hasSkillActivity && skillsTotal > 0 && (
+              <p className="mt-2 text-xs text-[#5b6780]">
+                {[
+                  skillsInProgress > 0
+                    ? `${skillsInProgress} ${skillsInProgress === 1 ? "skill" : "skills"} in progress`
+                    : null,
+                  skillsMastered > 0
+                    ? `${skillsMastered} of ${skillsTotal} ${skillsTotal === 1 ? "skill" : "skills"} mastered`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )}
           </div>
-          <span className="shrink-0 text-xs font-medium text-[#137333]">
-            {completedCount} of {totalCourses} courses completed
-          </span>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Milestone course cards — replaced with shimmer skeleton when refining */}
       <div className="mt-3 space-y-2">
@@ -479,6 +757,8 @@ export function LearningPlanBanner({ plan, onViewPlan, pendingRemovals, swapDisa
               pendingRemovals={pendingRemovals}
               swapDisabled={swapDisabled}
               completedCourseIds={completedCourseIds}
+              startedCourseIds={startedCourseIds}
+              roleProgress={roleProgress}
               onRemoveCourse={onRemoveCourse}
               onExploreAlternatives={onExploreAlternatives}
             />

@@ -2,7 +2,12 @@
 
 import type { ReactNode } from "react";
 import type { RoleProgress } from "@/lib/skills-store";
-import { computeOverallMastery, getSkillsByPriority } from "@/lib/skills-store";
+import {
+  computeOverallMastery,
+  computeOverallMasteryGroups,
+  getRoleUnits,
+  isGroupRoleProgress,
+} from "@/lib/skills-store";
 import { RETURNING_NON_CPLUS_RESUME_COURSE } from "@/lib/mock-persona-data";
 import { UpsellBanner } from "@/components/shared/upsell-banner";
 
@@ -85,14 +90,21 @@ function SkillsSnapshotSection({
   roleProgress: RoleProgress | null;
   inferredRoleTitle: string | null;
 }) {
-  const overallPct = roleProgress ? computeOverallMastery(roleProgress) : 0;
+  // Shape-agnostic: getRoleUnits works for both area-model roles and the
+  // group-model Data Analyst. `computeOverallMastery` only understands area
+  // shape, so dispatch the overall % helper by the progress shape.
+  const overallPct = !roleProgress
+    ? 0
+    : isGroupRoleProgress(roleProgress)
+      ? computeOverallMasteryGroups(roleProgress)
+      : computeOverallMastery(roleProgress);
   const topSkills = roleProgress
-    ? getSkillsByPriority(roleProgress)
-        .filter((s) => s.currentXp > 0)
+    ? getRoleUnits(roleProgress)
+        .filter((u) => u.currentXp > 0)
         .slice(0, 4)
-        .map((s) => ({
-          name: s.skillName,
-          percent: Math.round((s.currentXp / s.xpMax) * 100),
+        .map((u) => ({
+          name: u.displayName,
+          percent: Math.round((u.currentXp / u.xpMax) * 100),
         }))
     : [];
 

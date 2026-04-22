@@ -1,7 +1,8 @@
 "use client";
 
 import { X } from "lucide-react";
-import type { RoleProgress, SkillProgress } from "@/lib/skills-store";
+import type { RoleProgress, RoleUnit } from "@/lib/skills-store";
+import { getRoleUnits } from "@/lib/skills-store";
 
 interface SkillProgressModalProps {
   roleProgress: RoleProgress | null;
@@ -9,14 +10,14 @@ interface SkillProgressModalProps {
   onClose: () => void;
 }
 
-function SkillRow({ skill }: { skill: SkillProgress }) {
-  const pct = skill.xpMax > 0 ? Math.min(100, (skill.currentXp / skill.xpMax) * 100) : 0;
+function SkillRow({ unit }: { unit: RoleUnit }) {
+  const pct = unit.xpMax > 0 ? Math.min(100, (unit.currentXp / unit.xpMax) * 100) : 0;
   return (
     <div className="py-3">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium text-[#0f1114]">{skill.skillName}</span>
+        <span className="text-sm font-medium text-[#0f1114]">{unit.displayName}</span>
         <span className="shrink-0 text-xs text-[#5b6780]">
-          {skill.currentXp}/{skill.xpMax} XP
+          {unit.currentXp}/{unit.xpMax} XP
         </span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#E3EEFF]">
@@ -32,13 +33,16 @@ function SkillRow({ skill }: { skill: SkillProgress }) {
 export function SkillProgressModal({ roleProgress, targetSkillIds, onClose }: SkillProgressModalProps) {
   if (!roleProgress) return null;
 
-  const allSkills = Object.values(roleProgress.skills);
-  // Order: target skills (in plan) first, then any other skills with progress
-  const targetSkills = allSkills.filter((s) => targetSkillIds.includes(s.skillId));
-  const otherWithProgress = allSkills.filter(
-    (s) => !targetSkillIds.includes(s.skillId) && s.currentXp > 0,
+  // getRoleUnits handles both role shapes (area-model + group-model/DA) and returns
+  // a normalized list of mastery units with consistent display names.
+  const allUnits = getRoleUnits(roleProgress);
+  // Order: target units (in plan) first, then any other units with progress
+  const targetSet = new Set(targetSkillIds);
+  const targetUnits = allUnits.filter((u) => targetSet.has(u.key));
+  const otherWithProgress = allUnits.filter(
+    (u) => !targetSet.has(u.key) && u.currentXp > 0,
   );
-  const orderedSkills = [...targetSkills, ...otherWithProgress];
+  const orderedSkills = [...targetUnits, ...otherWithProgress];
 
   return (
     <div
@@ -78,8 +82,8 @@ export function SkillProgressModal({ roleProgress, targetSkillIds, onClose }: Sk
             </p>
           ) : (
             <div className="divide-y divide-[#f0f2f5]">
-              {orderedSkills.map((skill) => (
-                <SkillRow key={skill.skillId} skill={skill} />
+              {orderedSkills.map((unit) => (
+                <SkillRow key={unit.key} unit={unit} />
               ))}
             </div>
           )}
