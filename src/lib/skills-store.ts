@@ -681,3 +681,236 @@ export function getRoleUnits(
     required: s.priority === "should",
   }));
 }
+
+// ── Stacked (per-base-skill) view ──────────────────────────────────────────
+//
+// Collapses the per-group rows (Foundational Relational Databases, Beginner
+// Relational Databases, ...) into one entry per base skill. A learner is
+// labeled at a given mastery level only after every lower level is fully
+// mastered; out-of-order XP is preserved in the underlying MasteryGroup and
+// surfaces as a muted fill on the upper segment.
+
+export const ALL_MASTERY_LEVELS: MasteryLevel[] = [
+  "Foundational",
+  "Beginner",
+  "Intermediate",
+  "Advanced",
+];
+
+/** Export for UI components that need to compare levels. */
+export { LEVEL_ORDER };
+
+export interface StackedLevel {
+  level: MasteryLevel;
+  /** Empty string when `isMissing`. */
+  groupKey: GroupKey;
+  /** "Intermediate Relational Databases". Synthesised when the group is missing. */
+  displayName: string;
+  currentXp: number;
+  xpMax: number;
+  stage: MasteryStage;
+  /** xpMax > 0 && currentXp >= xpMax */
+  isComplete: boolean;
+  /** groupKey appears in progress.requiredGroupKeys */
+  isRequired: boolean;
+  /** All non-missing lower levels are complete. */
+  isUnlocked: boolean;
+  /** No group is defined for this {skill × level}. */
+  isMissing: boolean;
+  /** Level ordinal is above targetLevel (optional / stretch goal). */
+  isBeyondTarget: boolean;
+}
+
+export interface StackedSkill {
+  skillSlug: string;
+  skillName: string;
+  /** Length 4, ordered Foundational → Advanced. */
+  levels: StackedLevel[];
+  /** Highest contiguous mastered level; null when Foundational is incomplete. */
+  currentLevel: MasteryLevel | null;
+  /** Highest required level for the active role; null when no level is required. */
+  targetLevel: MasteryLevel | null;
+  totalCurrentXp: number;
+  totalXpMax: number;
+  anyRequired: boolean;
+  /** Highest priority across present levels (should > might > optional). */
+  priority: SkillPriority;
+}
+
+/** Highest level L where L and all non-missing levels below L are complete. */
+export function computeCurrentLevel(levels: StackedLevel[]): MasteryLevel | null {
+  let current: MasteryLevel | null = null;
+  for (const level of ALL_MASTERY_LEVELS) {
+    const slot = levels.find((l) => l.level === level);
+    if (!slot) break;
+    if (slot.isMissing) continue;
+    if (!slot.isComplete) break;
+    current = level;
+  }
+  return current;
+}
+
+/** Collapse a group-model progress record into one StackedSkill per skillSlug. */
+export function groupProgressBySkill(progress: GroupRoleProgress): StackedSkill[] {
+  const priorityOrder: Record<SkillPriority, number> = { should: 0, might: 1, optional: 2 };
+  const requiredSet = new Set(progress.requiredGroupKeys);
+
+  // Bucket groups by skillSlug.
+  const bySlug = new Map<string, MasteryGroup[]>();
+  for (const group of Object.values(progress.groups)) {
+    const list = bySlug.get(group.skillSlug);
+    if (list) list.push(group);
+    else bySlug.set(group.skillSlug, [group]);
+  }
+
+  const result: StackedSkill[] = [];
+  for (const [skillSlug, groups] of bySlug) {
+    const skillName = groups[0].skillName;
+
+    // Preliminary pass: build a per-level map (no flags computed yet).
+    const byLevel = new Map<MasteryLevel, MasteryGroup>();
+    for (const g of groups) byLevel.set(g.level, g);
+
+    // Compute targetLevel first — it's needed to stamp isBeyondTarget on each slot.
+    let targetLevel: MasteryLevel | null = null;
+    for (const level of ALL_MASTERY_LEVELS) {
+      const g = byLevel.get(level);
+      if (g && requiredSet.has(g.key)) targetLevel = level;
+    }
+    const targetOrdinal = targetLevel == null ? -1 : LEVEL_ORDER[targetLevel];
+
+    // Build 4 slots with all flags except isUnlocked (computed next).
+    const levels: StackedLevel[] = ALL_MASTERY_LEVELS.map((level) => {
+      const g = byLevel.get(level);
+      if (!g) {
+        return {
+          level,
+          groupKey: "",
+          displayName: `${level} ${skillName}`,
+          currentXp: 0,
+          xpMax: 0,
+          stage: "Not started" as MasteryStage,
+          isComplete: false,
+          isRequired: false,
+          isUnlocked: false,
+          isMissing: true,
+          isBeyondTarget: LEVEL_ORDER[level] > targetOrdinal && targetLevel != null,
+        };
+      }
+      return {
+        level,
+        groupKey: g.key,
+        displayName: g.displayName,
+        currentXp: g.currentXp,
+        xpMax: g.xpMax,
+        stage: g.stage,
+        isComplete: g.xpMax > 0 && g.currentXp >= g.xpMax,
+        isRequired: requiredSet.has(g.key),
+        isUnlocked: false, // filled in below
+        isMissing: false,
+        isBeyondTarget: LEVEL_ORDER[level] > targetOrdinal && targetLevel != null,
+      };
+    });
+
+    // Second pass: isUnlocked = all non-missing levels below are complete.
+    for (let i = 0; i < levels.length; i++) {
+      const lower = levels.slice(0, i);
+      levels[i].isUnlocked = lower.every((l) => l.isMissing || l.isComplete);
+    }
+
+    const currentLevel = computeCurrentLevel(levels);
+    const totalCurrentXp = levels.reduce((sum, l) => sum + l.currentXp, 0);
+    const totalXpMax = levels.reduce((sum, l) => sum + l.xpMax, 0);
+    const anyRequired = levels.some((l) => l.isRequired);
+    const priority: SkillPriority = (() => {
+      const present = groups.map((g) => g.priority);
+      if (present.includes("should")) return "should";
+      if (present.includes("might")) return "might";
+      return "optional";
+    })();
+
+    result.push({
+      skillSlug,
+      skillName,
+      levels,
+      currentLevel,
+      targetLevel,
+      totalCurrentXp,
+      totalXpMax,
+      anyRequired,
+      priority,
+    });
+  }
+
+  // Sort: required first → priority → name.
+  result.sort((a, b) => {
+    if (a.anyRequired !== b.anyRequired) return a.anyRequired ? -1 : 1;
+    const p = priorityOrder[a.priority] - priorityOrder[b.priority];
+    if (p !== 0) return p;
+    return a.skillName.localeCompare(b.skillName);
+  });
+
+  return result;
+}
+
+/** True when the learner's current level has reached (or exceeded) the target. */
+export function hasReachedTarget(skill: StackedSkill): boolean {
+  if (skill.targetLevel == null) return true;
+  if (skill.currentLevel == null) return false;
+  return LEVEL_ORDER[skill.currentLevel] >= LEVEL_ORDER[skill.targetLevel];
+}
+
+export interface BaseSkillTargetStatus {
+  skillSlug: string;
+  skillName: string;
+  currentLevel: MasteryLevel | null;
+  targetLevel: MasteryLevel | null;
+  targetReached: boolean;
+}
+
+/** Per-skill summary of whether the learner has hit the role's target level. */
+export function checkBaseSkillTargets(progress: GroupRoleProgress): BaseSkillTargetStatus[] {
+  return groupProgressBySkill(progress).map((s) => ({
+    skillSlug: s.skillSlug,
+    skillName: s.skillName,
+    currentLevel: s.currentLevel,
+    targetLevel: s.targetLevel,
+    targetReached: hasReachedTarget(s),
+  }));
+}
+
+export interface BaseSkillCounts {
+  totalSkills: number;
+  /** Has any XP but hasn't yet reached target. */
+  activeSkills: number;
+  /** Current level >= target level. */
+  masteredSkills: number;
+}
+
+/** Shape-agnostic count of base skills for header summaries. */
+export function getBaseSkillCounts(
+  progress: AnyRoleProgress | null | undefined,
+): BaseSkillCounts {
+  if (!progress) return { totalSkills: 0, activeSkills: 0, masteredSkills: 0 };
+  if (isGroupRoleProgress(progress)) {
+    const stacked = groupProgressBySkill(progress);
+    const required = stacked.filter((s) => s.anyRequired);
+    const mastered = required.filter((s) => hasReachedTarget(s)).length;
+    const active = required.filter(
+      (s) => !hasReachedTarget(s) && s.totalCurrentXp > 0,
+    ).length;
+    return {
+      totalSkills: required.length,
+      activeSkills: active,
+      masteredSkills: mastered,
+    };
+  }
+  const units = getRoleUnits(progress).filter((u) => u.required);
+  const mastered = units.filter((u) => u.currentXp >= u.xpMax && u.xpMax > 0).length;
+  const active = units.filter((u) => u.currentXp > 0 && u.currentXp < u.xpMax).length;
+  return {
+    totalSkills: units.length,
+    activeSkills: active,
+    masteredSkills: mastered,
+  };
+}

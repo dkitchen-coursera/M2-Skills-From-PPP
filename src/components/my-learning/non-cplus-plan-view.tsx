@@ -2,14 +2,17 @@
 
 import type { ReactNode } from "react";
 import type { RoleProgress } from "@/lib/skills-store";
+import type { StackedSkill } from "@/lib/skills-store";
 import {
   computeOverallMastery,
   computeOverallMasteryGroups,
   getRoleUnits,
+  groupProgressBySkill,
   isGroupRoleProgress,
 } from "@/lib/skills-store";
 import { RETURNING_NON_CPLUS_RESUME_COURSE } from "@/lib/mock-persona-data";
 import { UpsellBanner } from "@/components/shared/upsell-banner";
+import { StackedSkillRow } from "@/components/skills/stacked-skill-row";
 
 interface ReturningPlanViewProps {
   roleProgress: RoleProgress | null;
@@ -90,25 +93,32 @@ function SkillsSnapshotSection({
   roleProgress: RoleProgress | null;
   inferredRoleTitle: string | null;
 }) {
-  // Shape-agnostic: getRoleUnits works for both area-model roles and the
-  // group-model Data Analyst. `computeOverallMastery` only understands area
-  // shape, so dispatch the overall % helper by the progress shape.
   const overallPct = !roleProgress
     ? 0
     : isGroupRoleProgress(roleProgress)
       ? computeOverallMasteryGroups(roleProgress)
       : computeOverallMastery(roleProgress);
-  const topSkills = roleProgress
+
+  // Group-model: stacked bar per base skill. Legacy area-model: single bar
+  // per area. Both paths cap at 4 rows so the snapshot stays compact.
+  const stackedTop: StackedSkill[] =
+    roleProgress && isGroupRoleProgress(roleProgress)
+      ? groupProgressBySkill(roleProgress)
+          .filter((s) => s.totalCurrentXp > 0)
+          .slice(0, 4)
+      : [];
+  const legacyTop = roleProgress && !isGroupRoleProgress(roleProgress)
     ? getRoleUnits(roleProgress)
         .filter((u) => u.currentXp > 0)
         .slice(0, 4)
         .map((u) => ({
           name: u.displayName,
-          percent: Math.round((u.currentXp / u.xpMax) * 100),
+          percent: u.xpMax > 0 ? Math.round((u.currentXp / u.xpMax) * 100) : 0,
         }))
     : [];
 
-  if (topSkills.length === 0) return null;
+  const hasContent = stackedTop.length > 0 || legacyTop.length > 0;
+  if (!hasContent) return null;
 
   return (
     <section className="rounded-2xl border border-[#e3e8ef] bg-white p-6">
@@ -131,10 +141,18 @@ function SkillsSnapshotSection({
         </div>
       </div>
 
-      <div className="mt-5 space-y-4">
-        {topSkills.map((s) => (
-          <MiniSkillBar key={s.name} name={s.name} percent={s.percent} />
-        ))}
+      <div className="mt-5 space-y-2">
+        {stackedTop.length > 0
+          ? stackedTop.map((s) => (
+              <StackedSkillRow
+                key={s.skillSlug}
+                skill={s}
+                showStar={s.anyRequired}
+              />
+            ))
+          : legacyTop.map((s) => (
+              <MiniSkillBar key={s.name} name={s.name} percent={s.percent} />
+            ))}
       </div>
     </section>
   );

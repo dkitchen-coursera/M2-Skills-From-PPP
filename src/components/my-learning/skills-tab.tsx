@@ -5,19 +5,20 @@ import { ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import {
   computeOverallMastery,
-  computeOverallMasteryGroups,
   computeSkillPercent,
   computeExpressionStage,
   getSkillsByPriority,
-  getGroupsByPriority,
+  groupProgressBySkill,
+  hasReachedTarget,
   isGroupRoleProgress,
   EXPRESSION_XP_MAX,
   type RoleProgress,
   type SkillProgress,
   type ExpressionProgress,
   type GroupRoleProgress,
-  type MasteryGroup,
+  type StackedSkill,
 } from "@/lib/skills-store";
+import { StackedSkillRow } from "@/components/skills/stacked-skill-row";
 import { ROLE_CATALOG } from "@/lib/role-catalog";
 import type { LearningPlan } from "@/lib/plan-types";
 import { UpsellBanner } from "@/components/shared/upsell-banner";
@@ -319,40 +320,11 @@ function BelowFoldSection({
 
 // ── Group-model renderer (Data Analyst) ────────────────────────────────────
 //
-// Renders mastery progress for roles that use the {skill × level} group model.
-// Required groups (Band 1) sit above the fold; "Other skills" (Band 2 with
-// any XP) surface below for learners who earn XP outside the required set.
-
-function GroupSkillRow({ group }: { group: MasteryGroup }) {
-  const pct = group.xpMax > 0 ? Math.min(100, Math.round((group.currentXp / group.xpMax) * 100)) : 0;
-  const isMastered = group.currentXp >= group.xpMax && group.xpMax > 0;
-  return (
-    <div className="rounded-lg border border-[#e3e8ef] bg-white px-4 py-3">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className={clsx("text-sm font-semibold", isMastered ? "text-[#137333]" : "text-[#0f1114]")}>
-          {group.displayName}
-        </span>
-        <span className="shrink-0 text-xs tabular-nums text-[#5b6780]">
-          {isMastered ? (
-            <span className="font-semibold text-[#137333]">Mastered</span>
-          ) : (
-            <>
-              <span className="font-semibold text-[#0056d2]">{pct}%</span>
-              <span className="ml-1 text-[#c1cad9]">·</span>
-              <span className="ml-1">{group.currentXp}/{group.xpMax} XP</span>
-            </>
-          )}
-        </span>
-      </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e3e8ef]">
-        <div
-          className={clsx("h-full rounded-full transition-all duration-500", isMastered ? "bg-[#137333]" : "bg-[#0056d2]")}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
+// Renders mastery progress for roles that use the {skill × level} group model
+// — collapsed to ONE row per base skill (e.g. "Relational Databases") with a
+// 4-segment stacked bar (Foundational → Advanced) inside. Required skills
+// sit above the fold; "Other skills" surface below when Band 2 content
+// exists or the plan is skills-focused.
 
 function GroupSkillsView({
   roleProgress,
@@ -367,41 +339,47 @@ function GroupSkillsView({
   plan?: LearningPlan | null;
   planScope?: "role" | "skills" | null;
 }) {
-  const sorted = getGroupsByPriority(roleProgress);
+  const stacked = groupProgressBySkill(roleProgress);
 
-  // For skills-focused plans, "required" shrinks to only the groups this plan
-  // actually targets — a SQL plan shouldn't make the learner accountable for
-  // every Band 1 group of the broader Data Analyst role. For role-focused
-  // plans (or when no plan exists), fall back to the role's default required
-  // set (Band 1 for DA).
-  const planTargetKeySet = plan
-    ? new Set(
-        plan.milestones.flatMap((m) => m.targetSkills.map((ts) => ts.skillId)),
-      )
-    : null;
-  const isSkillsFocused = planScope === "skills" && planTargetKeySet && planTargetKeySet.size > 0;
+  // For skills-focused plans we narrow "required" to the skills the plan
+  // actually targets. The plan's targetSkills store group keys (e.g.
+  // `sql::intermediate`); translate those to skillSlugs via the progress
+  // record so a "SQL only" plan surfaces SQL regardless of which level the
+  // milestone targets.
+  const planTargetSlugs = (() => {
+    if (!plan) return null;
+    const slugs = new Set<string>();
+    for (const m of plan.milestones) {
+      for (const ts of m.targetSkills) {
+        const group = roleProgress.groups[ts.skillId];
+        if (group) slugs.add(group.skillSlug);
+      }
+    }
+    return slugs.size > 0 ? slugs : null;
+  })();
+  const isSkillsFocused = planScope === "skills" && planTargetSlugs != null;
 
-  const requiredSet = isSkillsFocused
-    ? (planTargetKeySet as Set<string>)
-    : new Set(roleProgress.requiredGroupKeys);
+  const required: StackedSkill[] = isSkillsFocused
+    ? stacked.filter((s) => planTargetSlugs!.has(s.skillSlug))
+    : stacked.filter((s) => s.anyRequired);
+  const others = stacked.filter((s) => !required.includes(s));
+  const otherWithProgress = others.filter((s) => s.totalCurrentXp > 0);
+  const otherNotStarted = others.filter((s) => s.totalCurrentXp === 0);
 
-  const required = sorted.filter((g) => requiredSet.has(g.key));
-  const otherWithProgress = sorted.filter((g) => !requiredSet.has(g.key) && g.currentXp > 0);
-  const otherNotStarted = sorted.filter((g) => !requiredSet.has(g.key) && g.currentXp === 0);
-
-  // Overall mastery % is computed against the CURRENTLY-VISIBLE required set.
-  // For skills-focused plans this means the number reflects the plan's scope,
-  // not the whole Band-1 set — which lines up with the "required" list shown.
+  // Overall mastery % — sum current/max across visible required skills.
   const overallPercent = (() => {
     if (required.length === 0) return 0;
-    const totalXp = required.reduce((sum, g) => sum + g.currentXp, 0);
-    const maxXp = required.reduce((sum, g) => sum + g.xpMax, 0);
+    const totalXp = required.reduce((sum, s) => sum + s.totalCurrentXp, 0);
+    const maxXp = required.reduce((sum, s) => sum + s.totalXpMax, 0);
     if (maxXp === 0) return 0;
     return Math.round((totalXp / maxXp) * 100);
   })();
-  const isFullyMastered = required.length > 0 && required.every((g) => g.currentXp >= g.xpMax);
-  const requiredMastered = required.filter((g) => g.currentXp >= g.xpMax).length;
-  const requiredInProgress = required.filter((g) => g.currentXp > 0 && g.currentXp < g.xpMax).length;
+  const isFullyMastered =
+    required.length > 0 && required.every((s) => hasReachedTarget(s));
+  const requiredMastered = required.filter((s) => hasReachedTarget(s)).length;
+  const requiredInProgress = required.filter(
+    (s) => !hasReachedTarget(s) && s.totalCurrentXp > 0,
+  ).length;
 
   const summaryLabel = isFullyMastered
     ? `All ${required.length} required skills mastered`
@@ -441,19 +419,19 @@ function GroupSkillsView({
         </div>
       </div>
 
-      {/* Required (Band 1) groups */}
+      {/* Required skills, one row per base skill */}
       {required.length > 0 && (
         <div>
           <h3 className="mb-2 text-sm font-semibold text-[#1f1f1f]">Required for this plan</h3>
           <div className="space-y-2">
-            {required.map((g) => (
-              <GroupSkillRow key={g.key} group={g} />
+            {required.map((s) => (
+              <StackedSkillRow key={s.skillSlug} skill={s} />
             ))}
           </div>
         </div>
       )}
 
-      {/* "Other skills" — Band 2 groups surfaced as earnable but not required */}
+      {/* "Other skills" — skills outside the plan's required set. */}
       {otherTotal > 0 && (
         <div className="border-t border-[#e3e8ef] pt-6">
           <button
@@ -471,8 +449,8 @@ function GroupSkillsView({
                   <h3 className="mb-2 text-sm font-semibold text-[#1f1f1f]">In progress</h3>
                   <p className="mb-3 text-xs text-[#5b6780]">Earnable skills outside your required set — not needed to complete the plan.</p>
                   <div className="space-y-2">
-                    {otherWithProgress.map((g) => (
-                      <GroupSkillRow key={g.key} group={g} />
+                    {otherWithProgress.map((s) => (
+                      <StackedSkillRow key={s.skillSlug} skill={s} showStar={false} />
                     ))}
                   </div>
                 </div>
@@ -480,15 +458,10 @@ function GroupSkillsView({
               {otherNotStarted.length > 0 && (
                 <div>
                   <h3 className="mb-2 text-sm font-semibold text-[#1f1f1f]">Available to explore</h3>
-                  <p className="mb-3 text-xs text-[#5b6780]">Additional mastery groups from the data occupation — available if you want to explore beyond this plan.</p>
+                  <p className="mb-3 text-xs text-[#5b6780]">Additional skills from the data occupation — available if you want to explore beyond this plan.</p>
                   <div className="space-y-2">
-                    {otherNotStarted.map((g) => (
-                      <div key={g.key} className="flex items-center justify-between rounded-lg border border-[#e3e8ef] bg-[#fafbfc] px-4 py-3">
-                        <span className="text-sm font-medium text-[#5b6780]">{g.displayName}</span>
-                        <span className="text-xs text-[#9ca3af]">
-                          {Object.keys(g.expressions).length} expressions · Not started
-                        </span>
-                      </div>
+                    {otherNotStarted.map((s) => (
+                      <StackedSkillRow key={s.skillSlug} skill={s} showStar={false} />
                     ))}
                   </div>
                 </div>
@@ -500,6 +473,7 @@ function GroupSkillsView({
     </div>
   );
 }
+
 
 // ── Main Component ─────────────────────────────────────────────────────────
 

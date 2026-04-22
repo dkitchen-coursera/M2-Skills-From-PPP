@@ -2,6 +2,9 @@
 
 import {
   getRoleUnits,
+  groupProgressBySkill,
+  hasReachedTarget,
+  isGroupRoleProgress,
   type AnyRoleProgress,
 } from "@/lib/skills-store";
 
@@ -11,13 +14,23 @@ interface RoleMasteryViewProps {
   onReturnToDashboard: () => void;
 }
 
+interface MasteredRow {
+  key: string;
+  label: string;
+}
+
 export function RoleMasteryView({
   progress,
   onExploreNext,
   onReturnToDashboard,
 }: RoleMasteryViewProps) {
-  // Works for both role shapes: returns a normalized list with displayNames.
-  const units = getRoleUnits(progress);
+  // Group-model: one entry per base skill that reached its role target.
+  // Legacy area-model: one entry per mastered unit.
+  const rows: MasteredRow[] = isGroupRoleProgress(progress)
+    ? groupProgressBySkill(progress)
+        .filter((s) => s.targetLevel != null && hasReachedTarget(s))
+        .map((s) => ({ key: s.skillSlug, label: s.skillName }))
+    : getRoleUnits(progress).map((u) => ({ key: u.key, label: u.displayName }));
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-white px-6">
@@ -61,16 +74,16 @@ export function RoleMasteryView({
 
       {/* Skills checklist */}
       <div className="mb-8 w-full max-w-sm space-y-2">
-        {units.map((unit) => (
+        {rows.map((row) => (
           <div
-            key={unit.key}
+            key={row.key}
             className="flex items-center gap-3 rounded-lg border border-green-100 bg-[var(--cds-color-green-25)] px-4 py-2.5"
           >
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--cds-color-green-600)] text-white text-xs">
               ✓
             </span>
             <span className="text-sm font-medium text-gray-800">
-              {unit.displayName}
+              {row.label}
             </span>
             <span className="ml-auto text-xs font-semibold text-[var(--cds-color-green-700)]">
               Mastered

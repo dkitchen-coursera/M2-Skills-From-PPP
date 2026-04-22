@@ -1,18 +1,20 @@
 "use client";
 
 import type { LexModule } from "@/lib/lex-types";
-import type { RoleProgress } from "@/lib/skills-store";
+import type { AnyRoleProgress, StackedSkill } from "@/lib/skills-store";
 import { computeItemXp } from "@/lib/lex-data";
 import {
   computeOverallMastery,
   computeOverallMasteryGroups,
+  groupProgressBySkill,
   isGroupRoleProgress,
   lookupRoleUnit,
 } from "@/lib/skills-store";
+import { StackedSkillRow } from "@/components/skills/stacked-skill-row";
 
 interface LexModuleCompleteModalProps {
   module: LexModule;
-  roleProgress: RoleProgress | null;
+  roleProgress: AnyRoleProgress | null;
   targetSkillIds: string[];
   onContinue: () => void;
   onSeeProgress: () => void;
@@ -31,14 +33,31 @@ export function LexModuleCompleteModal({
     0,
   );
 
-  // Get mastery units relevant to this course/module. Works for both role shapes:
-  // for area-model roles `targetSkillIds` are skill-area ids; for group-model (DA)
-  // they are group keys like `tableau-software::intermediate`.
-  const relevantSkills = roleProgress
-    ? targetSkillIds
-        .map((id) => lookupRoleUnit(roleProgress, id))
-        .filter((u): u is NonNullable<typeof u> => !!u)
-    : [];
+  const isGroup = !!roleProgress && isGroupRoleProgress(roleProgress);
+
+  // Legacy shape: one row per area-model unit.
+  const relevantUnits =
+    roleProgress && !isGroupRoleProgress(roleProgress)
+      ? targetSkillIds
+          .map((id) => lookupRoleUnit(roleProgress, id))
+          .filter((u): u is NonNullable<typeof u> => !!u)
+      : [];
+
+  // Group-model: dedupe target group keys to base-skill slugs and render a
+  // compact stacked bar per skill.
+  const relevantStacked: StackedSkill[] =
+    roleProgress && isGroupRoleProgress(roleProgress)
+      ? (() => {
+          const slugs = new Set(
+            targetSkillIds
+              .map((id) => roleProgress.groups[id]?.skillSlug)
+              .filter((s): s is string => !!s),
+          );
+          return groupProgressBySkill(roleProgress).filter((s) =>
+            slugs.has(s.skillSlug),
+          );
+        })()
+      : [];
 
   const overallPercent = !roleProgress
     ? 0
@@ -101,9 +120,20 @@ export function LexModuleCompleteModal({
             )}
 
             {/* Skill progress bars */}
-            {relevantSkills.length > 0 && (
+            {isGroup && relevantStacked.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {relevantStacked.map((skill) => (
+                  <StackedSkillRow
+                    key={skill.skillSlug}
+                    skill={skill}
+                    showStar={skill.anyRequired}
+                  />
+                ))}
+              </div>
+            )}
+            {!isGroup && relevantUnits.length > 0 && (
               <div className="mt-4 space-y-3">
-                {relevantSkills.map((unit) => {
+                {relevantUnits.map((unit) => {
                   const pct = unit.xpMax > 0
                     ? Math.min(100, Math.round((unit.currentXp / unit.xpMax) * 100))
                     : 0;

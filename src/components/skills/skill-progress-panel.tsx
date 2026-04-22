@@ -3,25 +3,25 @@
 import {
   computeOverallMastery,
   computeOverallMasteryGroups,
+  getBaseSkillCounts,
   getRoleUnits,
+  groupProgressBySkill,
   isGroupRoleProgress,
   type AnyRoleProgress,
 } from "@/lib/skills-store";
 import { SkillXpBar } from "./skill-xp-bar";
+import { StackedSkillRow } from "./stacked-skill-row";
 
 interface SkillProgressPanelProps {
   progress: AnyRoleProgress;
 }
 
 export function SkillProgressPanel({ progress }: SkillProgressPanelProps) {
-  // Shape-agnostic: getRoleUnits returns a normalized list with displayNames.
-  const units = getRoleUnits(progress);
-  const overallPercent = isGroupRoleProgress(progress)
+  const isGroup = isGroupRoleProgress(progress);
+  const overallPercent = isGroup
     ? computeOverallMasteryGroups(progress)
     : computeOverallMastery(progress);
-  const requiredUnits = units.filter((u) => u.required);
-  const shouldCount = requiredUnits.length;
-  const masteredCount = requiredUnits.filter((u) => u.stage === "Mastered").length;
+  const { totalSkills, masteredSkills } = getBaseSkillCounts(progress);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -32,7 +32,7 @@ export function SkillProgressPanel({ progress }: SkillProgressPanelProps) {
             {progress.roleTitle}
           </h3>
           <p className="text-xs text-gray-500">
-            {masteredCount}/{shouldCount} required skills mastered
+            {masteredSkills}/{totalSkills} required skills mastered
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -53,19 +53,27 @@ export function SkillProgressPanel({ progress }: SkillProgressPanelProps) {
         />
       </div>
 
-      {/* Skill list */}
-      <div className="space-y-3">
-        {units.map((unit) => (
-          <div key={unit.key}>
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-800">
-                {unit.displayName}
-              </span>
+      {/* Skill list — one row per base skill for group-model, or per area for legacy. */}
+      {isGroup ? (
+        <div className="space-y-2">
+          {groupProgressBySkill(progress).map((skill) => (
+            <StackedSkillRow key={skill.skillSlug} skill={skill} />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {getRoleUnits(progress).map((unit) => (
+            <div key={unit.key}>
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-800">
+                  {unit.displayName}
+                </span>
+              </div>
+              <SkillXpBar currentXp={unit.currentXp} level={unit.stage} xpMax={unit.xpMax} />
             </div>
-            <SkillXpBar currentXp={unit.currentXp} level={unit.stage} xpMax={unit.xpMax} />
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
