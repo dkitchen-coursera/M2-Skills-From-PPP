@@ -12,7 +12,7 @@ import {
 } from "@/lib/skills-store";
 import { RETURNING_NON_CPLUS_RESUME_COURSE } from "@/lib/mock-persona-data";
 import { UpsellBanner } from "@/components/shared/upsell-banner";
-import { StackedSkillBar } from "@/components/skills/stacked-skill-bar";
+import { StackedSkillRow } from "@/components/skills/stacked-skill-row";
 
 interface ReturningPlanViewProps {
   roleProgress: RoleProgress | null;
@@ -86,29 +86,6 @@ function ResumeCourseSection({ onResume }: { onResume?: () => void }) {
   );
 }
 
-function StackedSnapshotRow({ skill }: { skill: StackedSkill }) {
-  const percent =
-    skill.totalXpMax > 0
-      ? Math.round((skill.totalCurrentXp / skill.totalXpMax) * 100)
-      : 0;
-  return (
-    <div>
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-[#0f1114]">{skill.skillName}</span>
-        <span className="text-xs font-medium text-[#4d5765]">{percent}%</span>
-      </div>
-      <div className="mt-1.5">
-        <StackedSkillBar
-          levels={skill.levels}
-          currentLevel={skill.currentLevel}
-          targetLevel={skill.targetLevel}
-          compact
-        />
-      </div>
-    </div>
-  );
-}
-
 function SkillsSnapshotSection({
   roleProgress,
   inferredRoleTitle,
@@ -164,10 +141,14 @@ function SkillsSnapshotSection({
         </div>
       </div>
 
-      <div className="mt-5 space-y-4">
+      <div className="mt-5 space-y-2">
         {stackedTop.length > 0
           ? stackedTop.map((s) => (
-              <StackedSnapshotRow key={s.skillSlug} skill={s} />
+              <StackedSkillRow
+                key={s.skillSlug}
+                skill={s}
+                showStar={s.anyRequired}
+              />
             ))
           : legacyTop.map((s) => (
               <MiniSkillBar key={s.name} name={s.name} percent={s.percent} />
