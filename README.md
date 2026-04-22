@@ -52,7 +52,7 @@ Once a plan is generated, the learner lands on the **My Learning** page with tab
 
 - **My Plan** — Full plan with milestones and courses. Click "Start learning plan" to enter the course experience (LEX).
 - **In Progress** — Courses grouped by partner with progress indicators.
-- **Skills** — Role-focused skill areas with XP progress bars. "Should" skills are above the fold; other skill tiers are expandable below.
+- **Skills** — Role-focused skills with a stacked 4-segment mastery bar per skill (Foundational → Beginner → Intermediate → Advanced), a current-level badge, and a per-role target marker. Required skills are above the fold; other skills are expandable below.
 
 ### Inside a Course (LEX)
 
@@ -97,12 +97,14 @@ A floating **"P" button** (bottom-right corner) opens the proto tools panel for 
 - Skills-focused course plan generation (master skills, not just complete courses)
 - Course item completion earns Skill XP toward role goals
 - Role-focused Skills tab highlighting goal-relevant skills above the fold
+- **Mastery-levels framework for skill progress** — each skill now progresses through four sequential mastery levels (Foundational → Beginner → Intermediate → Advanced), visualised as one stacked 4-segment bar per skill with a current-level badge and a role-specific target marker. Sequential rule: a learner isn't labeled at a given level until every lower level is fully mastered. This replaces the earlier "skill area grouping of skill expressions" view (one row per skill area with a single XP bar) for roles on the group model (Data Analyst today); legacy area-model roles keep their previous Skills tab rendering.
+- Consistent mastery rendering across surfaces — Skills tab, My Plan skills snapshot, LEX Skill Progress modal, and the module-complete modal all reuse the same stacked-row component, with stars reserved for plan-required skills
 - Module complete celebration with skill progress & plan-level mastery %
 - Course complete screen with certificate, LinkedIn share & plan progress timeline
 - Per-course completion tracking in My Plan and In Progress tabs
 - Role mastery celebration on plan completion
 - Role catalog (4 roles, 8 skills each)
-- XP-based progress tracking (0-1500 per skill)
+- XP-based progress tracking, 300 XP per skill expression — totals per skill now vary with the number of expressions at each mastery level (legacy area-model roles still use a fixed 1500 XP per skill area)
 - Proto tools panel for triggering demo events, toggling Coursera Plus tier, and resetting inferred role state
 
 ## Tech Stack
