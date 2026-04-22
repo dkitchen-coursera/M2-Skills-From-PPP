@@ -1,7 +1,18 @@
 /**
  * Role Catalog — 4 roles with skill areas and skill expressions.
  * Data Analyst skill data ported from ai-sprint-skills prototype.
+ *
+ * Data Analyst has migrated to the new `{skill × mastery-level}` group model
+ * (`model: "groups"`) sourced from `data/da-mastery-groups.ts`. The legacy
+ * `skills: SkillArea[]` is still populated on DA as a fallback for unmigrated
+ * surfaces until Phase 8 cleanup removes it.
  */
+
+import {
+  DATA_ANALYST_MASTERY_GROUPS,
+  REQUIRED_GROUP_KEYS,
+  type MasteryGroupDef,
+} from "./data/da-mastery-groups";
 
 export interface SkillExpression {
   id: string;
@@ -27,6 +38,12 @@ export interface RoleDefinition {
   demandLabel: string;
   skills: SkillArea[];
   keywords: string[];
+  /** Discriminator — defaults to "areas" when absent. "groups" roles also populate `groups`. */
+  model?: "areas" | "groups";
+  /** Populated when model === "groups" — unit of mastery is {skill × level}. */
+  groups?: MasteryGroupDef[];
+  /** Group keys that count toward plan completion. DA: Career Band 1 groups. */
+  requiredGroupKeys?: string[];
 }
 
 const EXPR_XP = 300;
@@ -389,6 +406,9 @@ export const ROLE_CATALOG: RoleDefinition[] = [
       "data", "analyst", "analytics", "sql", "statistics", "python",
       "spreadsheet", "tableau", "power bi", "excel", "visualization", "dashboard",
     ],
+    model: "groups",
+    groups: DATA_ANALYST_MASTERY_GROUPS,
+    requiredGroupKeys: REQUIRED_GROUP_KEYS,
   },
   {
     id: "digital-marketing",
@@ -466,12 +486,34 @@ export function findRoleByKeywords(text: string): RoleDefinition | null {
 /** Get a role catalog summary suitable for embedding in a system prompt. */
 export function getRoleCatalogForPrompt(): string {
   return ROLE_CATALOG.map((role) => {
-    const skills = role.skills.map((s) => `  - ${s.name} (${s.expressions.length} skill expressions)`).join("\n");
+    let skillsBlock: string;
+    if (role.model === "groups" && role.groups) {
+      // Group-shape: emit `  - Intermediate SQL (Band 1, 4 expressions)` lines,
+      // grouped by career band to reflect the required vs. other distinction.
+      const band1 = role.groups.filter((g) => g.careerBand === 1);
+      const band2 = role.groups.filter((g) => g.careerBand === 2);
+      const fmt = (g: MasteryGroupDef) =>
+        `  - ${g.displayName} [${g.key}] (${g.expressions.length} expression${g.expressions.length === 1 ? "" : "s"})`;
+      const parts: string[] = [];
+      if (band1.length) {
+        parts.push("Required (Data Career Band 1):");
+        parts.push(band1.map(fmt).join("\n"));
+      }
+      if (band2.length) {
+        parts.push("Other (Data Career Band 2 — not required for plan completion):");
+        parts.push(band2.map(fmt).join("\n"));
+      }
+      skillsBlock = parts.join("\n");
+    } else {
+      skillsBlock = role.skills
+        .map((s) => `  - ${s.name} (${s.expressions.length} skill expressions)`)
+        .join("\n");
+    }
     return `### ${role.title} (${role.subtitle}) — ${role.category}
 ID: ${role.id}
 ${role.description}
 Demand: ${role.demandLabel}
 Skills:
-${skills}`;
+${skillsBlock}`;
   }).join("\n\n");
 }

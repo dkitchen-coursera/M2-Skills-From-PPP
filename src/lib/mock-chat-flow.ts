@@ -354,29 +354,40 @@ export async function streamMockResponse(
 // ── Mock Learning Plan (Role-based) ──────────────────────────────────────
 
 const MOCK_LEARNING_PLAN: LearningPlan = {
-  title: "Data Analyst Skill Mastery Plan",
+  title: "Data Analyst Career Plan",
   summary: {
     role: "Data Analyst",
-    skills: ["SQL & Data Analysis", "Data Visualization", "Python for Data"],
+    skills: ["Data Storytelling", "Data Visualization", "Dashboard Design"],
     totalDuration: "3-6 months",
     hoursPerWeek: "~5 hours/week",
+    // NOTE: Under the group-mastery model (Data Analyst), skill names here are
+    // "{Level} {Skill}" display names so chips render correctly.
     skillBreakdown: {
-      should: ["Data Acquisition and Preparation", "Data Analysis and Exploration", "Data Transformation and Manipulation", "Data Visualization and Reporting", "Database Operations", "Generative AI Assistance", "Statistical Modeling and Inference"],
-      might: ["Advanced Analytics & Techniques", "Advanced Data Visualization & Reporting", "Data Engineering & Management"],
-      optional: ["Generative AI Applications", "Predictive Analytics & Forecasting", "Statistical Analysis & Modeling"],
+      should: [
+        "Foundational Visualization Graphic",
+        "Beginner Visualization Graphic",
+        "Beginner Data Visualization Software",
+        "Beginner Dashboard",
+        "Intermediate Data Presentation",
+        "Intermediate Data Storytelling",
+        "Intermediate Statistical Visualization",
+      ],
+      might: ["Intermediate Plot Graphics"],
+      optional: ["Advanced Data Transformation", "Advanced Interactive Data Visualization"],
     },
   },
   milestones: [
     {
       id: "milestone-1",
-      name: "Phase 1: Master Data Foundations (4-6 weeks)",
-      description: "Goal: Data Integrity, SQL Fundamentals, Data Acquisition",
-      skills: ["SQL", "Data Literacy", "Spreadsheets"],
+      name: "Phase 1: Master Visualization Foundations (4-6 weeks)",
+      description: "Goal: Foundational Visualization Graphic, Foundational Statistical Visualization",
+      skills: ["Visualization Graphic", "Statistical Visualization"],
       badges: ["Core Track"],
       estimatedWeeks: 5,
       targetSkills: [
-        { skillId: "data-acquisition-preparation", skillName: "Data Acquisition and Preparation", xpTarget: 750, priority: "should" },
-        { skillId: "database-operations", skillName: "Database Operations for Data Analysis", xpTarget: 500, priority: "should" },
+        // Group keys — {skillSlug}::{level-lowercase}. xpTarget is clamped to group xpMax.
+        { skillId: "visualization-graphic::foundational", skillName: "Foundational Visualization Graphic", xpTarget: 300, priority: "should" },
+        { skillId: "statistical-visualization::foundational", skillName: "Foundational Statistical Visualization", xpTarget: 300, priority: "should" },
       ],
       courses: [
         {
@@ -393,7 +404,7 @@ const MOCK_LEARNING_PLAN: LearningPlan = {
           estimatedHours: 0,
           activityBadges: [],
           xpValue: 500,
-          targetSkillIds: ["data-acquisition-preparation", "database-operations"],
+          targetSkillIds: ["visualization-graphic::foundational", "statistical-visualization::foundational"],
         },
         {
           id: "mock-course-2",
@@ -409,20 +420,21 @@ const MOCK_LEARNING_PLAN: LearningPlan = {
           estimatedHours: 16,
           activityBadges: [],
           xpValue: 250,
-          targetSkillIds: ["database-operations"],
+          targetSkillIds: ["visualization-graphic::foundational"],
         },
       ],
     },
     {
       id: "milestone-2",
-      name: "Phase 2: Master Analysis & Visualization (4-6 weeks)",
-      description: "Goal: Statistical Analysis, Data Visualization, Communication",
-      skills: ["Data Visualization", "Statistics", "Tableau"],
+      name: "Phase 2: Master Beginner Visualization & Dashboards (4-6 weeks)",
+      description: "Goal: Beginner Visualization Graphic, Beginner Data Visualization Software, Beginner Dashboard",
+      skills: ["Data Visualization", "Tableau", "Dashboard Design"],
       badges: [],
       estimatedWeeks: 5,
       targetSkills: [
-        { skillId: "data-analysis-exploration", skillName: "Data Analysis and Exploration", xpTarget: 750, priority: "should" },
-        { skillId: "data-visualization-reporting", skillName: "Data Visualization and Reporting", xpTarget: 750, priority: "should" },
+        { skillId: "visualization-graphic::beginner", skillName: "Beginner Visualization Graphic", xpTarget: 600, priority: "should" },
+        { skillId: "data-visualization-software::beginner", skillName: "Beginner Data Visualization Software", xpTarget: 750, priority: "should" },
+        { skillId: "dashboard::beginner", skillName: "Beginner Dashboard", xpTarget: 750, priority: "should" },
       ],
       courses: [
         {
@@ -439,7 +451,7 @@ const MOCK_LEARNING_PLAN: LearningPlan = {
           estimatedHours: 60,
           activityBadges: [],
           xpValue: 500,
-          targetSkillIds: ["data-visualization-reporting"],
+          targetSkillIds: ["data-visualization-software::beginner", "dashboard::beginner"],
         },
         {
           id: "mock-course-4",
@@ -455,21 +467,22 @@ const MOCK_LEARNING_PLAN: LearningPlan = {
           estimatedHours: 84,
           activityBadges: [],
           xpValue: 500,
-          targetSkillIds: ["data-analysis-exploration", "statistical-modeling-inference"],
+          targetSkillIds: ["visualization-graphic::beginner", "statistical-visualization::beginner"],
         },
       ],
     },
     {
       id: "milestone-3",
-      name: "Phase 3: Master Python & Automation (3-4 weeks)",
-      description: "Goal: Python Programming, Data Automation, Tool Proficiency",
-      skills: ["Python", "Pandas", "Automation"],
+      name: "Phase 3: Master Intermediate Storytelling & Presentation (3-4 weeks)",
+      description: "Goal: Intermediate Data Storytelling, Intermediate Data Presentation, Intermediate Statistical Visualization",
+      skills: ["Data Storytelling", "Data Presentation", "Statistical Visualization"],
       badges: [],
       estimatedWeeks: 4,
       targetSkills: [
-        { skillId: "data-transformation-manipulation", skillName: "Data Transformation and Manipulation", xpTarget: 750, priority: "should" },
-        { skillId: "gen-ai-assistance", skillName: "Generative AI Assistance", xpTarget: 500, priority: "should" },
-        { skillId: "advanced-analytics-techniques", skillName: "Advanced Analytics & Techniques", xpTarget: 375, priority: "might" },
+        { skillId: "data-storytelling::intermediate", skillName: "Intermediate Data Storytelling", xpTarget: 750, priority: "should" },
+        { skillId: "data-presentation::intermediate", skillName: "Intermediate Data Presentation", xpTarget: 750, priority: "should" },
+        { skillId: "statistical-visualization::intermediate", skillName: "Intermediate Statistical Visualization", xpTarget: 750, priority: "should" },
+        { skillId: "plot-graphics::intermediate", skillName: "Intermediate Plot Graphics", xpTarget: 375, priority: "might" },
       ],
       courses: [
         {
@@ -486,7 +499,7 @@ const MOCK_LEARNING_PLAN: LearningPlan = {
           estimatedHours: 96,
           activityBadges: [],
           xpValue: 500,
-          targetSkillIds: ["data-transformation-manipulation", "gen-ai-assistance"],
+          targetSkillIds: ["data-storytelling::intermediate", "data-presentation::intermediate"],
         },
         {
           id: "mock-course-6",
@@ -502,7 +515,7 @@ const MOCK_LEARNING_PLAN: LearningPlan = {
           estimatedHours: 15,
           activityBadges: [],
           xpValue: 375,
-          targetSkillIds: ["data-transformation-manipulation", "advanced-analytics-techniques"],
+          targetSkillIds: ["statistical-visualization::intermediate", "plot-graphics::intermediate"],
         },
       ],
     },
@@ -519,22 +532,28 @@ const MOCK_SKILLS_LEARNING_PLAN: LearningPlan = {
     totalDuration: "3-4 months",
     hoursPerWeek: "~5 hours/week",
     skillBreakdown: {
-      should: ["Database Operations for Data Analysis", "Data Visualization and Reporting", "Data Acquisition and Preparation"],
-      might: ["Data Analysis and Exploration"],
-      optional: ["Data Transformation and Manipulation", "Generative AI Assistance"],
+      // Display names follow the {Level} {Skill} format for DA's group-mastery model.
+      should: [
+        "Foundational Relational Databases",
+        "Beginner Data Manipulation",
+        "Beginner Data Visualization Software",
+        "Beginner Dashboard",
+      ],
+      might: ["Intermediate Data Storytelling"],
+      optional: ["Intermediate Data Manipulation", "Advanced Data Transformation"],
     },
   },
   milestones: [
     {
       id: "milestone-1",
       name: "Phase 1: Master SQL Fundamentals (4-5 weeks)",
-      description: "Goal: SQL Queries, Database Operations, Data Retrieval",
-      skills: ["SQL", "Database Operations", "Data Retrieval"],
+      description: "Goal: Foundational Relational Databases, Beginner Data Manipulation",
+      skills: ["SQL", "Relational Databases", "Data Manipulation"],
       badges: ["Core Track"],
       estimatedWeeks: 4,
       targetSkills: [
-        { skillId: "database-operations", skillName: "Database Operations for Data Analysis", xpTarget: 750, priority: "should" },
-        { skillId: "data-acquisition-preparation", skillName: "Data Acquisition and Preparation", xpTarget: 500, priority: "should" },
+        { skillId: "relational-databases::foundational", skillName: "Foundational Relational Databases", xpTarget: 750, priority: "should" },
+        { skillId: "data-manipulation::beginner", skillName: "Beginner Data Manipulation", xpTarget: 500, priority: "should" },
       ],
       courses: [
         {
@@ -551,7 +570,7 @@ const MOCK_SKILLS_LEARNING_PLAN: LearningPlan = {
           estimatedHours: 16,
           activityBadges: [],
           xpValue: 375,
-          targetSkillIds: ["database-operations"],
+          targetSkillIds: ["relational-databases::foundational"],
         },
         {
           id: "mock-skills-course-2",
@@ -567,19 +586,20 @@ const MOCK_SKILLS_LEARNING_PLAN: LearningPlan = {
           estimatedHours: 20,
           activityBadges: [],
           xpValue: 375,
-          targetSkillIds: ["database-operations", "data-acquisition-preparation"],
+          targetSkillIds: ["relational-databases::foundational", "data-manipulation::beginner"],
         },
       ],
     },
     {
       id: "milestone-2",
       name: "Phase 2: Master Data Visualization (4-5 weeks)",
-      description: "Goal: Visualization Tools, Dashboard Design, Storytelling with Data",
+      description: "Goal: Beginner Data Visualization Software, Beginner Dashboard",
       skills: ["Data Visualization", "Tableau", "Dashboard Design"],
       badges: [],
       estimatedWeeks: 5,
       targetSkills: [
-        { skillId: "data-visualization-reporting", skillName: "Data Visualization and Reporting", xpTarget: 750, priority: "should" },
+        { skillId: "data-visualization-software::beginner", skillName: "Beginner Data Visualization Software", xpTarget: 750, priority: "should" },
+        { skillId: "dashboard::beginner", skillName: "Beginner Dashboard", xpTarget: 750, priority: "should" },
       ],
       courses: [
         {
@@ -596,7 +616,7 @@ const MOCK_SKILLS_LEARNING_PLAN: LearningPlan = {
           estimatedHours: 60,
           activityBadges: [],
           xpValue: 500,
-          targetSkillIds: ["data-visualization-reporting"],
+          targetSkillIds: ["data-visualization-software::beginner", "dashboard::beginner"],
         },
         {
           id: "mock-skills-course-4",
@@ -612,20 +632,20 @@ const MOCK_SKILLS_LEARNING_PLAN: LearningPlan = {
           estimatedHours: 18,
           activityBadges: [],
           xpValue: 250,
-          targetSkillIds: ["data-visualization-reporting"],
+          targetSkillIds: ["data-storytelling::intermediate"],
         },
       ],
     },
     {
       id: "milestone-3",
       name: "Phase 3: Apply & Integrate Skills (3-4 weeks)",
-      description: "Goal: Combined Analysis & Visualization Projects, Real-world Application",
-      skills: ["Data Analysis", "SQL", "Data Visualization"],
+      description: "Goal: Intermediate Data Storytelling, Intermediate Data Manipulation",
+      skills: ["Data Storytelling", "Data Manipulation", "Data Analysis"],
       badges: [],
       estimatedWeeks: 3,
       targetSkills: [
-        { skillId: "data-analysis-exploration", skillName: "Data Analysis and Exploration", xpTarget: 500, priority: "might" },
-        { skillId: "data-acquisition-preparation", skillName: "Data Acquisition and Preparation", xpTarget: 250, priority: "should" },
+        { skillId: "data-storytelling::intermediate", skillName: "Intermediate Data Storytelling", xpTarget: 500, priority: "should" },
+        { skillId: "data-manipulation::intermediate", skillName: "Intermediate Data Manipulation", xpTarget: 500, priority: "might" },
       ],
       courses: [
         {
@@ -642,7 +662,7 @@ const MOCK_SKILLS_LEARNING_PLAN: LearningPlan = {
           estimatedHours: 240,
           activityBadges: [],
           xpValue: 500,
-          targetSkillIds: ["data-analysis-exploration", "data-acquisition-preparation"],
+          targetSkillIds: ["data-storytelling::intermediate", "data-manipulation::intermediate"],
         },
       ],
     },

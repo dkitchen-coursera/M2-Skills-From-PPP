@@ -32,7 +32,7 @@ import {
 } from "@/lib/skills-store";
 import { EntryScreen } from "@/components/entry/entry-screen";
 import { Homepage } from "@/components/home/homepage";
-import { MyLearningPage } from "@/components/my-learning/my-learning-page";
+import { MyLearningPage, type TabId as MyLearningTabId } from "@/components/my-learning/my-learning-page";
 import { LihpLoadingScreen } from "@/components/lihp/lihp-loading-screen";
 import { FullScreenChat } from "@/components/chat/full-screen-chat";
 import { ProtoToolsPanel } from "@/components/proto/proto-tools-panel";
@@ -41,6 +41,14 @@ import {
   setRandomProgress,
   resetProgress,
   completeCourse,
+  completeCourseByGroups,
+  setAllMasteredGroups,
+  setRandomProgressGroups,
+  resetProgressGroups,
+  isGroupRoleProgress,
+  createInitialProgressForRole,
+  type AnyRoleProgress,
+  type GroupRoleProgress,
 } from "@/lib/skills-store";
 import { LexPage } from "@/components/lex/lex-page";
 import { CourseCompleteScreen } from "@/components/lex/course-complete-screen";
@@ -186,6 +194,10 @@ export function AppShell() {
   // Tracks the latest update type so the useEffect can compute the message index after render
   const [pendingIndicatorType, setPendingIndicatorType] = useState<"created" | "rebuilt" | "swapped" | null>(null);
   const messagesLengthRef = useRef(0); // tracks current messages length for onData
+  // State type stays narrow (`RoleProgress`) for the duration of the area→group migration.
+  // Data Analyst actually stores a `GroupRoleProgress` at runtime — a safe cast is used at
+  // the handful of mutation sites that dispatch on shape via `isGroupRoleProgress`.
+  // Phase 6 (UI sweep) widens downstream prop types properly.
   const [roleProgress, setRoleProgress] = useState<RoleProgress | null>(
     isReturning ? createReturningLearnerProgress() : null,
   );
@@ -198,6 +210,9 @@ export function AppShell() {
   const [startedCourseIds, setStartedCourseIds] = useState<Set<string>>(new Set());
   const [planStarted, setPlanStarted] = useState(false);
   const [lexItemsCompleted, setLexItemsCompleted] = useState(0);
+  // Which My Learning tab to land on the next time that page mounts.
+  // Defaults to "my-plan"; set to "skills" when exiting LEX via "See skill progress".
+  const [nextMyLearningTab, setNextMyLearningTab] = useState<MyLearningTabId>("my-plan");
   const lexTriggerModuleComplete = useRef<(() => void) | null>(null);
   const lexTriggerCourseComplete = useRef<(() => void) | null>(null);
 
@@ -311,6 +326,23 @@ export function AppShell() {
           setPendingRemovals(new Set());
           setIsRefining(false);
           setPhase("plan_generated");
+          // Infer plan scope from the plan title when it wasn't set earlier in
+          // the flow. Titles follow the prompt convention: role plans end with
+          // "Career Plan", skills plans end with "Mastery Plan". Only fill in
+          // when scope is currently unset so we don't clobber the returning-
+          // learner "choose scope" CTA value.
+          setGatheredInfo((prev) => {
+            if (prev.planScope) return prev;
+            const title = planData?.title ?? "";
+            const inferredScope: "role" | "skills" | null =
+              /\bCareer Plan\b/i.test(title)
+                ? "role"
+                : /\bMastery Plan\b/i.test(title)
+                  ? "skills"
+                  : null;
+            if (!inferredScope) return prev;
+            return { ...prev, planScope: inferredScope };
+          });
         }
         if (dataPart.type === "data-course-swap") {
           const swapData = dataPart.data as {
@@ -361,8 +393,8 @@ export function AppShell() {
           console.log("[AppShell] Role identified:", roleData.roleId, roleData.gapAnalysis);
           const role = findRoleById(roleData.roleId);
           if (role) {
-            const progress = createInitialProgress(role, roleData.gapAnalysis);
-            setRoleProgress(progress);
+            const progress = createInitialProgressForRole(role, roleData.gapAnalysis);
+            setRoleProgress(progress as unknown as RoleProgress);
           }
         }
       } catch (err) {
@@ -695,6 +727,14 @@ export function AppShell() {
   const handleExitLex = useCallback(() => {
     setActiveLexCourse(null);
     setCompletedLexCourse(null);
+    setNextMyLearningTab("my-plan");
+    setPhase("plan_generated");
+  }, [setPhase]);
+
+  const handleSeeSkillProgress = useCallback(() => {
+    setActiveLexCourse(null);
+    setCompletedLexCourse(null);
+    setNextMyLearningTab("skills");
     setPhase("plan_generated");
   }, [setPhase]);
 
@@ -723,29 +763,53 @@ export function AppShell() {
   }, [setPhase]);
 
   const handleLexXpEarned = useCallback((skillXpMap: Record<string, number>) => {
-    setRoleProgress(prev => prev ? completeCourse(prev, skillXpMap) : prev);
-    setLexItemsCompleted(n => n + 1);
+    setRoleProgress((prev) => {
+      if (!prev) return prev;
+      if (isGroupRoleProgress(prev)) {
+        return completeCourseByGroups(prev, skillXpMap) as unknown as RoleProgress;
+      }
+      return completeCourse(prev, skillXpMap);
+    });
+    setLexItemsCompleted((n) => n + 1);
   }, []);
 
-  // Proto tools handlers
+  // Proto tools handlers — dispatch on role shape so group-shaped progress
+  // (Data Analyst post-refactor) mutates via the group-aware helpers.
+  // Casts bridge the Phase 4/6 type-narrowing gap; runtime dispatch is via isGroupRoleProgress.
   const handleProtoSetAllMastered = useCallback(() => {
     if (!roleProgress) return;
-    setRoleProgress(setAllMastered(roleProgress));
+    setRoleProgress(
+      isGroupRoleProgress(roleProgress)
+        ? (setAllMasteredGroups(roleProgress) as unknown as RoleProgress)
+        : setAllMastered(roleProgress),
+    );
   }, [roleProgress]);
 
   const handleProtoSetRandomProgress = useCallback(() => {
     if (!roleProgress) return;
-    setRoleProgress(setRandomProgress(roleProgress));
+    setRoleProgress(
+      isGroupRoleProgress(roleProgress)
+        ? (setRandomProgressGroups(roleProgress) as unknown as RoleProgress)
+        : setRandomProgress(roleProgress),
+    );
   }, [roleProgress]);
 
   const handleProtoResetProgress = useCallback(() => {
     if (!roleProgress) return;
-    setRoleProgress(resetProgress(roleProgress));
+    setRoleProgress(
+      isGroupRoleProgress(roleProgress)
+        ? (resetProgressGroups(roleProgress) as unknown as RoleProgress)
+        : resetProgress(roleProgress),
+    );
   }, [roleProgress]);
 
   const handleProtoTriggerMastery = useCallback(() => {
     if (!roleProgress) return;
-    setRoleProgress(setAllMastered(roleProgress));
+    setRoleProgress(
+      isGroupRoleProgress(roleProgress)
+        ? (setAllMasteredGroups(roleProgress) as unknown as RoleProgress)
+        : setAllMastered(roleProgress),
+    );
     setPhase("role_mastery");
   }, [roleProgress, setPhase]);
 
@@ -768,8 +832,8 @@ export function AppShell() {
       might: l2Skills.slice(0, 3).map((s) => s.id),
       optional: l2Skills.slice(3).map((s) => s.id),
     };
-    const progress = createInitialProgress(role, gapAnalysis);
-    setRoleProgress(progress);
+    const progress = createInitialProgressForRole(role, gapAnalysis);
+    setRoleProgress(progress as unknown as RoleProgress);
     // Reset plan so a new one can be generated
     setPlan(null);
     planTriggerSent.current = false;
@@ -806,7 +870,7 @@ export function AppShell() {
           might: l2.slice(0, 3).map((s) => s.id),
           optional: l2.slice(3).map((s) => s.id),
         };
-        setRoleProgress(createInitialProgress(role, gap));
+        setRoleProgress(createInitialProgressForRole(role, gap) as unknown as RoleProgress);
       } else {
         setRoleProgress(next);
       }
@@ -978,6 +1042,7 @@ export function AppShell() {
           itemsCompleted={lexItemsCompleted}
           onRegisterTriggerModuleComplete={(trigger) => { lexTriggerModuleComplete.current = trigger; }}
           onRegisterTriggerCourseComplete={(trigger) => { lexTriggerCourseComplete.current = trigger; }}
+          onSeeSkillProgress={handleSeeSkillProgress}
         />
       ) : phase === "entry" ? (
         <EntryScreen onSend={handleSend} />
@@ -1033,6 +1098,7 @@ export function AppShell() {
           onResumeCourse={handleResumeCourse}
           onStartPlan={handleStartPlan}
           planStarted={planStarted}
+          initialTab={nextMyLearningTab}
         />
       ) : (
         /* Homepage — shown after onboarding when clicking logo, or for new non-C+ */

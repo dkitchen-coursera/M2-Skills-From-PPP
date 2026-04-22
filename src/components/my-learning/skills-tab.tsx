@@ -5,15 +5,21 @@ import { ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import {
   computeOverallMastery,
+  computeOverallMasteryGroups,
   computeSkillPercent,
   computeExpressionStage,
   getSkillsByPriority,
+  getGroupsByPriority,
+  isGroupRoleProgress,
   EXPRESSION_XP_MAX,
   type RoleProgress,
   type SkillProgress,
   type ExpressionProgress,
+  type GroupRoleProgress,
+  type MasteryGroup,
 } from "@/lib/skills-store";
 import { ROLE_CATALOG } from "@/lib/role-catalog";
+import type { LearningPlan } from "@/lib/plan-types";
 import { UpsellBanner } from "@/components/shared/upsell-banner";
 import { InferredRoleControl } from "./inferred-role-header";
 
@@ -21,6 +27,14 @@ import { InferredRoleControl } from "./inferred-role-header";
 
 interface SkillsTabProps {
   roleProgress: RoleProgress | null;
+  /**
+   * Generated learning plan. When `planScope === "skills"`, the Skills tab
+   * restricts the "Required" section to the groups this plan targets — a
+   * SQL-focused plan shouldn't display the learner's progress against every
+   * Band 1 group for the role.
+   */
+  plan?: LearningPlan | null;
+  planScope?: "role" | "skills" | null;
   hasCourseraPlus?: boolean;
   inferredRoleId?: string | null;
   inferredRoleTitle?: string | null;
@@ -303,10 +317,196 @@ function BelowFoldSection({
   );
 }
 
+// ── Group-model renderer (Data Analyst) ────────────────────────────────────
+//
+// Renders mastery progress for roles that use the {skill × level} group model.
+// Required groups (Band 1) sit above the fold; "Other skills" (Band 2 with
+// any XP) surface below for learners who earn XP outside the required set.
+
+function GroupSkillRow({ group }: { group: MasteryGroup }) {
+  const pct = group.xpMax > 0 ? Math.min(100, Math.round((group.currentXp / group.xpMax) * 100)) : 0;
+  const isMastered = group.currentXp >= group.xpMax && group.xpMax > 0;
+  return (
+    <div className="rounded-lg border border-[#e3e8ef] bg-white px-4 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className={clsx("text-sm font-semibold", isMastered ? "text-[#137333]" : "text-[#0f1114]")}>
+          {group.displayName}
+        </span>
+        <span className="shrink-0 text-xs tabular-nums text-[#5b6780]">
+          {isMastered ? (
+            <span className="font-semibold text-[#137333]">Mastered</span>
+          ) : (
+            <>
+              <span className="font-semibold text-[#0056d2]">{pct}%</span>
+              <span className="ml-1 text-[#c1cad9]">·</span>
+              <span className="ml-1">{group.currentXp}/{group.xpMax} XP</span>
+            </>
+          )}
+        </span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e3e8ef]">
+        <div
+          className={clsx("h-full rounded-full transition-all duration-500", isMastered ? "bg-[#137333]" : "bg-[#0056d2]")}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function GroupSkillsView({
+  roleProgress,
+  isInferredOnly,
+  inferredRoleTitle,
+  plan,
+  planScope,
+}: {
+  roleProgress: GroupRoleProgress;
+  isInferredOnly: boolean;
+  inferredRoleTitle?: string | null;
+  plan?: LearningPlan | null;
+  planScope?: "role" | "skills" | null;
+}) {
+  const sorted = getGroupsByPriority(roleProgress);
+
+  // For skills-focused plans, "required" shrinks to only the groups this plan
+  // actually targets — a SQL plan shouldn't make the learner accountable for
+  // every Band 1 group of the broader Data Analyst role. For role-focused
+  // plans (or when no plan exists), fall back to the role's default required
+  // set (Band 1 for DA).
+  const planTargetKeySet = plan
+    ? new Set(
+        plan.milestones.flatMap((m) => m.targetSkills.map((ts) => ts.skillId)),
+      )
+    : null;
+  const isSkillsFocused = planScope === "skills" && planTargetKeySet && planTargetKeySet.size > 0;
+
+  const requiredSet = isSkillsFocused
+    ? (planTargetKeySet as Set<string>)
+    : new Set(roleProgress.requiredGroupKeys);
+
+  const required = sorted.filter((g) => requiredSet.has(g.key));
+  const otherWithProgress = sorted.filter((g) => !requiredSet.has(g.key) && g.currentXp > 0);
+  const otherNotStarted = sorted.filter((g) => !requiredSet.has(g.key) && g.currentXp === 0);
+
+  // Overall mastery % is computed against the CURRENTLY-VISIBLE required set.
+  // For skills-focused plans this means the number reflects the plan's scope,
+  // not the whole Band-1 set — which lines up with the "required" list shown.
+  const overallPercent = (() => {
+    if (required.length === 0) return 0;
+    const totalXp = required.reduce((sum, g) => sum + g.currentXp, 0);
+    const maxXp = required.reduce((sum, g) => sum + g.xpMax, 0);
+    if (maxXp === 0) return 0;
+    return Math.round((totalXp / maxXp) * 100);
+  })();
+  const isFullyMastered = required.length > 0 && required.every((g) => g.currentXp >= g.xpMax);
+  const requiredMastered = required.filter((g) => g.currentXp >= g.xpMax).length;
+  const requiredInProgress = required.filter((g) => g.currentXp > 0 && g.currentXp < g.xpMax).length;
+
+  const summaryLabel = isFullyMastered
+    ? `All ${required.length} required skills mastered`
+    : requiredInProgress > 0
+      ? `${requiredInProgress} of ${required.length} required skills in progress`
+      : `${required.length} required skills to master`;
+
+  const [showOther, setShowOther] = useState(false);
+  const otherTotal = otherWithProgress.length + otherNotStarted.length;
+
+  return (
+    <div className="space-y-6">
+      {/* Summary card — overall mastery across the visible required set. */}
+      <div className={`rounded-xl border p-5 ${isFullyMastered ? "border-[#c4eed0] bg-[#f0faf3]" : "border-[#e3e8ef] bg-[#f0f6ff]"}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-[#1f1f1f]">
+              {isInferredOnly ? `Skills for ${inferredRoleTitle}` : "Your Skill Plan"}
+            </h2>
+            <p className="text-sm text-[#5b6780]">
+              {summaryLabel}
+              {requiredMastered > 0 && !isFullyMastered && (
+                <span className="ml-1 text-[#137333]">· {requiredMastered} completed</span>
+              )}
+            </p>
+          </div>
+          <div className="text-right">
+            <span className={`text-2xl font-bold ${isFullyMastered ? "text-[#137333]" : "text-[#0056d2]"}`}>{overallPercent}%</span>
+            <p className="text-xs text-[#5b6780]">{isFullyMastered ? "complete" : "mastery"}</p>
+          </div>
+        </div>
+        <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/60">
+          <div
+            className={`h-full rounded-full transition-all duration-700 ${isFullyMastered ? "bg-[#137333]" : "bg-[#0056d2]"}`}
+            style={{ width: `${overallPercent}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Required (Band 1) groups */}
+      {required.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-[#1f1f1f]">Required for this plan</h3>
+          <div className="space-y-2">
+            {required.map((g) => (
+              <GroupSkillRow key={g.key} group={g} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* "Other skills" — Band 2 groups surfaced as earnable but not required */}
+      {otherTotal > 0 && (
+        <div className="border-t border-[#e3e8ef] pt-6">
+          <button
+            type="button"
+            onClick={() => setShowOther(!showOther)}
+            className="flex w-full items-center justify-center gap-1 rounded-lg border border-[#dae1ed] bg-white px-4 py-2.5 text-sm font-medium text-[#0056d2] hover:bg-[#f0f6ff] transition-colors"
+          >
+            {showOther ? "Hide other skills" : `View ${otherTotal} other skills you can earn`}
+            <ChevronDown size={16} className={clsx("transition-transform duration-200", showOther && "rotate-180")} />
+          </button>
+          {showOther && (
+            <div className="mt-4 space-y-4">
+              {otherWithProgress.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-[#1f1f1f]">In progress</h3>
+                  <p className="mb-3 text-xs text-[#5b6780]">Earnable skills outside your required set — not needed to complete the plan.</p>
+                  <div className="space-y-2">
+                    {otherWithProgress.map((g) => (
+                      <GroupSkillRow key={g.key} group={g} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {otherNotStarted.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-[#1f1f1f]">Available to explore</h3>
+                  <p className="mb-3 text-xs text-[#5b6780]">Additional mastery groups from the data occupation — available if you want to explore beyond this plan.</p>
+                  <div className="space-y-2">
+                    {otherNotStarted.map((g) => (
+                      <div key={g.key} className="flex items-center justify-between rounded-lg border border-[#e3e8ef] bg-[#fafbfc] px-4 py-3">
+                        <span className="text-sm font-medium text-[#5b6780]">{g.displayName}</span>
+                        <span className="text-xs text-[#9ca3af]">
+                          {Object.keys(g.expressions).length} expressions · Not started
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export function SkillsTab({
   roleProgress,
+  plan,
+  planScope,
   hasCourseraPlus = true,
   inferredRoleId,
   inferredRoleTitle,
@@ -318,6 +518,19 @@ export function SkillsTab({
   // The Skills tab title + subtitle changes for inferred-only learners (no plan yet).
   // Plan-based learners keep "Your Skill Plan".
   const isInferredOnly = !!inferredRoleId && !!inferredRoleTitle;
+
+  // Group-model roles (Data Analyst post-refactor) render a different view.
+  if (roleProgress && isGroupRoleProgress(roleProgress)) {
+    return (
+      <GroupSkillsView
+        roleProgress={roleProgress}
+        isInferredOnly={isInferredOnly}
+        inferredRoleTitle={inferredRoleTitle}
+        plan={plan}
+        planScope={planScope}
+      />
+    );
+  }
 
   if (!roleProgress) {
     return (

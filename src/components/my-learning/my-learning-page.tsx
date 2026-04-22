@@ -15,7 +15,7 @@ import { InferredRoleControl } from "./inferred-role-header";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type TabId = "in-progress" | "my-plan" | "completed" | "skills" | "certificates";
+export type TabId = "in-progress" | "my-plan" | "completed" | "skills" | "certificates";
 
 interface MyLearningPageProps {
   messages: ChatUIMessage[];
@@ -58,6 +58,8 @@ interface MyLearningPageProps {
   onResumeCourse?: (course: PlanCourse) => void;
   onStartPlan?: () => void;
   planStarted?: boolean;
+  /** Tab to select on mount. Defaults to "my-plan". */
+  initialTab?: TabId;
 }
 
 // ── Tab definitions ────────────────────────────────────────────────────────
@@ -118,8 +120,9 @@ export function MyLearningPage({
   onResumeCourse,
   onStartPlan,
   planStarted,
+  initialTab = "my-plan",
 }: MyLearningPageProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("my-plan");
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const tabRefs = useRef<Map<TabId, HTMLButtonElement>>(new Map());
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
 
@@ -255,6 +258,7 @@ export function MyLearningPage({
                 swapDisabled={swapDisabled}
                 roleProgress={roleProgress}
                 completedCourseIds={completedCourseIds}
+                startedCourseIds={startedCourseIds}
                 onRemoveCourse={onRemoveCourse}
                 onExploreAlternatives={onExploreAlternatives}
                 onExploreNextRole={onExploreNextRole}
@@ -270,6 +274,8 @@ export function MyLearningPage({
             {activeTab === "skills" && (
               <SkillsTab
                 roleProgress={roleProgress}
+                plan={plan}
+                planScope={gatheredInfo.planScope ?? null}
                 hasCourseraPlus={hasCourseraPlus}
                 inferredRoleId={!plan ? inferredRoleId : null}
                 inferredRoleTitle={!plan ? inferredRoleTitle : null}

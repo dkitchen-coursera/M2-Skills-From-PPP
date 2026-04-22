@@ -1,7 +1,11 @@
 import { z } from "zod";
 
 export const buildPlanInputSchema = z.object({
-  title: z.string().describe("Plan title, e.g. 'Data Analyst Learning Plan'"),
+  title: z
+    .string()
+    .describe(
+      "Plan title. For a role-focused/career plan use '{Role} Career Plan' (e.g. 'Data Analyst Career Plan'). For a skills-focused plan use '{Skills} Mastery Plan' (e.g. 'SQL & Data Visualization Mastery Plan'). Do NOT use 'Skill Mastery Plan' for career/role-focused plans.",
+    ),
   role: z.string().describe("Target role or learning goal"),
   skills: z
     .array(z.string())
@@ -14,9 +18,17 @@ export const buildPlanInputSchema = z.object({
     .describe("Learner's weekly commitment, e.g. '~6 hours/week'"),
   skillBreakdown: z
     .object({
-      should: z.array(z.string()).describe("Skill names the learner should master"),
-      might: z.array(z.string()).describe("Skill names the learner might need to deepen"),
-      optional: z.array(z.string()).describe("Optionally beneficial skill names"),
+      should: z
+        .array(z.string())
+        .describe(
+          "Display names the learner should master. For group-model roles (Data Analyst) use mastery-group display names like 'Intermediate SQL'; for area-model roles use skill area names.",
+        ),
+      might: z
+        .array(z.string())
+        .describe("Display names the learner might need to deepen."),
+      optional: z
+        .array(z.string())
+        .describe("Optionally beneficial display names."),
     })
     .optional()
     .describe("Skill gap categorization based on current vs. desired role"),
@@ -48,14 +60,27 @@ export const buildPlanInputSchema = z.object({
       targetSkills: z
         .array(
           z.object({
-            skillId: z.string().describe("Skill area ID from the role catalog"),
-            skillName: z.string().describe("Skill area display name"),
-            xpTarget: z.number().describe("XP this milestone contributes to this skill (e.g. 375, 500, 750)"),
+            skillId: z
+              .string()
+              .describe(
+                "For area-model roles: skill area ID (e.g. 'database-operations'). " +
+                  "For group-model roles (Data Analyst): mastery group key (e.g. 'tableau-software::intermediate').",
+              ),
+            skillName: z
+              .string()
+              .describe(
+                "Display name. For group-model roles use the full 'Intermediate SQL' form so chips read correctly.",
+              ),
+            xpTarget: z
+              .number()
+              .describe(
+                "XP this milestone contributes (e.g. 375, 500, 750). Clamp to the target's xpMax — small groups can have xpMax < 750.",
+              ),
             priority: z.enum(["should", "might", "optional"]).describe("Skill priority category"),
           })
         )
         .default([])
-        .describe("Target skills this milestone helps master, with XP targets"),
+        .describe("Target skills/groups this milestone helps master, with XP targets"),
     })
   ),
 });

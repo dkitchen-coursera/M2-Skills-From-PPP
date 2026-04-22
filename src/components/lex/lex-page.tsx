@@ -4,7 +4,8 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import type { PlanCourse } from "@/lib/plan-types";
 import type { RoleProgress } from "@/lib/skills-store";
 import type { LexItem, LexModule } from "@/lib/lex-types";
-import { generateSyllabusForCourse, distributeXpToSkills, DEFAULT_DAILY_GOALS } from "@/lib/lex-data";
+import { generateSyllabusForCourse, computeItemXpAwards, DEFAULT_DAILY_GOALS } from "@/lib/lex-data";
+import { findRoleById } from "@/lib/role-catalog";
 import { LexHeader } from "./lex-header";
 import { DailyGoalPanel } from "./daily-goal-panel";
 import { LexSidebar } from "./lex-sidebar";
@@ -17,7 +18,13 @@ import { LexGoalToast } from "./lex-goal-toast";
 type ModalState =
   | { type: "none" }
   | { type: "video-end"; item: LexItem; nextItem: LexItem | null }
-  | { type: "module-complete"; module: LexModule }
+  /**
+   * `groupsEarnedXp` holds the keys (group keys for group-model roles, area ids
+   * for area-model roles) that actually received XP from this module's items.
+   * The modal uses this to show the skills the learner moved on, rather than
+   * just the course's advertised target skills.
+   */
+  | { type: "module-complete"; module: LexModule; groupsEarnedXp: string[] }
   | { type: "skill-progress" };
 
 interface LexPageProps {
@@ -29,10 +36,18 @@ interface LexPageProps {
   itemsCompleted: number;
   onRegisterTriggerModuleComplete?: (trigger: () => void) => void;
   onRegisterTriggerCourseComplete?: (trigger: () => void) => void;
+  /** Exit LEX and open the My Learning → Skills tab. */
+  onSeeSkillProgress?: () => void;
 }
 
-export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComplete, itemsCompleted, onRegisterTriggerModuleComplete, onRegisterTriggerCourseComplete }: LexPageProps) {
-  const syllabus = useMemo(() => generateSyllabusForCourse(course), [course]);
+export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComplete, itemsCompleted, onRegisterTriggerModuleComplete, onRegisterTriggerCourseComplete, onSeeSkillProgress }: LexPageProps) {
+  // Resolve the role so XP awards can dispatch on role shape (groups vs. areas).
+  // The syllabus also uses the role to compute item skill tags ("{Level} {Skill}").
+  const role = useMemo(
+    () => (roleProgress ? findRoleById(roleProgress.roleId) : null),
+    [roleProgress],
+  );
+  const syllabus = useMemo(() => generateSyllabusForCourse(course, role), [course, role]);
 
   const allItems = useMemo(
     () => syllabus.modules.flatMap((m) => m.lessonGroups.flatMap((g) => g.items)),
@@ -53,6 +68,29 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
     [allItems, activeItemId],
   );
 
+  /**
+   * Collect the set of mastery-group keys (or legacy skill-area ids) that any
+   * items in `module` award XP to. Used to feed the module-complete modal a
+   * list of skills that actually got XP from this module's work — so the
+   * rendered bars reflect what moved, not just the course's advertised targets.
+   */
+  const collectModuleEarnedKeys = useCallback(
+    (module: LexModule): string[] => {
+      const earned = new Set<string>();
+      for (const lessonGroup of module.lessonGroups) {
+        for (const item of lessonGroup.items) {
+          const xpMap = computeItemXpAwards(item, {
+            targetSkillIds: syllabus.targetSkillIds,
+            role,
+          });
+          for (const key of Object.keys(xpMap)) earned.add(key);
+        }
+      }
+      return earned.size > 0 ? Array.from(earned) : syllabus.targetSkillIds;
+    },
+    [syllabus.targetSkillIds, role],
+  );
+
   // Register proto tools trigger for module complete modal
   useEffect(() => {
     if (!onRegisterTriggerModuleComplete) return;
@@ -65,45 +103,39 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
         : syllabus.modules[0];
       if (!module) return;
 
-      // Complete all uncompleted items in this module and award XP
+      // Complete all uncompleted items in this module and award XP. Aggregate
+      // the skill-XP map ahead of `setCompletedItemIds` so the earned keys are
+      // available to the modal state update below.
       const moduleItems = module.lessonGroups.flatMap((g) => g.items);
+      const alreadyCompleted = completedItemIds;
+      let addedXp = 0;
+      let addedPractice = 0;
+      let addedGraded = 0;
+      const aggregatedSkillXp: Record<string, number> = {};
+      for (const item of moduleItems) {
+        if (alreadyCompleted.has(item.id)) continue;
+        addedXp += item.xpValue;
+        if (item.type === "practice") addedPractice++;
+        if (item.type === "graded") addedGraded++;
+        const xpMap = computeItemXpAwards(item, {
+          targetSkillIds: syllabus.targetSkillIds,
+          role,
+        });
+        for (const [key, xp] of Object.entries(xpMap)) {
+          aggregatedSkillXp[key] = (aggregatedSkillXp[key] ?? 0) + xp;
+        }
+      }
+
       setCompletedItemIds((prev) => {
         const next = new Set(prev);
-        let addedXp = 0;
-        let addedPractice = 0;
-        let addedGraded = 0;
-        const aggregatedSkillXp: Record<string, number> = {};
-
-        for (const item of moduleItems) {
-          if (!next.has(item.id)) {
-            next.add(item.id);
-            addedXp += item.xpValue;
-            if (item.type === "practice") addedPractice++;
-            if (item.type === "graded") addedGraded++;
-            // Distribute XP to skills
-            const xpMap = distributeXpToSkills(item.xpValue, syllabus.targetSkillIds);
-            for (const [skillId, xp] of Object.entries(xpMap)) {
-              aggregatedSkillXp[skillId] = (aggregatedSkillXp[skillId] ?? 0) + xp;
-            }
-          }
-        }
-
-        // Batch award all XP at once
-        if (Object.keys(aggregatedSkillXp).length > 0) {
-          onXpEarned(aggregatedSkillXp);
-        }
-        if (addedXp > 0) {
-          setSessionXp((prev) => prev + addedXp);
-        }
-        if (addedPractice > 0) {
-          setPracticeCompleted((prev) => prev + addedPractice);
-        }
-        if (addedGraded > 0) {
-          setGradedCompleted((prev) => prev + addedGraded);
-        }
-
+        for (const item of moduleItems) next.add(item.id);
         return next;
       });
+
+      if (Object.keys(aggregatedSkillXp).length > 0) onXpEarned(aggregatedSkillXp);
+      if (addedXp > 0) setSessionXp((prev) => prev + addedXp);
+      if (addedPractice > 0) setPracticeCompleted((prev) => prev + addedPractice);
+      if (addedGraded > 0) setGradedCompleted((prev) => prev + addedGraded);
 
       // Advance active item to the first item in the next module
       const moduleIdx = syllabus.modules.indexOf(module);
@@ -113,9 +145,14 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
         if (firstNextItem) setActiveItemId(firstNextItem.id);
       }
 
-      setModalState({ type: "module-complete", module });
+      // Hand the actual earned group keys to the modal so skill bars reflect
+      // what moved (not just the course's advertised targets). Fall back to the
+      // course's target skills if nothing was awarded — keeps the modal informative.
+      const earnedKeys = Object.keys(aggregatedSkillXp);
+      const groupsEarnedXp = earnedKeys.length > 0 ? earnedKeys : syllabus.targetSkillIds;
+      setModalState({ type: "module-complete", module, groupsEarnedXp });
     });
-  }, [onRegisterTriggerModuleComplete, activeItemId, syllabus, onXpEarned]);
+  }, [onRegisterTriggerModuleComplete, activeItemId, syllabus, onXpEarned, role, completedItemIds]);
 
   // Register proto tools trigger for course complete
   useEffect(() => {
@@ -135,9 +172,12 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
             addedXp += item.xpValue;
             if (item.type === "practice") addedPractice++;
             if (item.type === "graded") addedGraded++;
-            const xpMap = distributeXpToSkills(item.xpValue, syllabus.targetSkillIds);
-            for (const [skillId, xp] of Object.entries(xpMap)) {
-              aggregatedSkillXp[skillId] = (aggregatedSkillXp[skillId] ?? 0) + xp;
+            const xpMap = computeItemXpAwards(item, {
+              targetSkillIds: syllabus.targetSkillIds,
+              role,
+            });
+            for (const [key, xp] of Object.entries(xpMap)) {
+              aggregatedSkillXp[key] = (aggregatedSkillXp[key] ?? 0) + xp;
             }
           }
         }
@@ -161,7 +201,7 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
       // Notify app shell to show the course complete screen
       onCourseComplete();
     });
-  }, [onRegisterTriggerCourseComplete, allItems, syllabus.targetSkillIds, onXpEarned, onCourseComplete]);
+  }, [onRegisterTriggerCourseComplete, allItems, syllabus.targetSkillIds, onXpEarned, onCourseComplete, role]);
 
   const findNextItem = useCallback(
     (currentId: string): LexItem | null => {
@@ -207,7 +247,10 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
       setGradedCompleted((prev) => prev + 1);
     }
 
-    const xpMap = distributeXpToSkills(activeItem.xpValue, syllabus.targetSkillIds);
+    const xpMap = computeItemXpAwards(activeItem, {
+      targetSkillIds: syllabus.targetSkillIds,
+      role,
+    });
     onXpEarned(xpMap);
 
     // Practice/graded items render their own success state with a Next button —
@@ -222,7 +265,7 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
     // - practice/graded → success-state screen with Next item CTA
     // The parent only handles XP recording here; advancement happens via the
     // onNext callback wired through LexContentArea.
-  }, [activeItem, completedItemIds, syllabus.targetSkillIds, onXpEarned]);
+  }, [activeItem, completedItemIds, syllabus.targetSkillIds, onXpEarned, role]);
 
   function advanceToNext(currentId: string) {
     const next = allItems.find((item) => {
@@ -240,12 +283,16 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
     if (isLastItemInModule(item.id)) {
       const module = findModuleForItem(item.id);
       if (module) {
-        setModalState({ type: "module-complete", module });
+        setModalState({
+          type: "module-complete",
+          module,
+          groupsEarnedXp: collectModuleEarnedKeys(module),
+        });
         return;
       }
     }
     advanceToNext(item.id);
-  }, [modalState, isLastItemInModule, findModuleForItem]);
+  }, [modalState, isLastItemInModule, findModuleForItem, collectModuleEarnedKeys]);
 
   const handleModuleCompleteContinue = useCallback(() => {
     setModalState({ type: "none" });
@@ -368,7 +415,11 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
               if (isLastItemInModule(activeItem.id)) {
                 const module = findModuleForItem(activeItem.id);
                 if (module) {
-                  setModalState({ type: "module-complete", module });
+                  setModalState({
+                    type: "module-complete",
+                    module,
+                    groupsEarnedXp: collectModuleEarnedKeys(module),
+                  });
                   return;
                 }
               }
@@ -390,10 +441,17 @@ export function LexPage({ course, roleProgress, onXpEarned, onExit, onCourseComp
         <LexModuleCompleteModal
           module={modalState.module}
           roleProgress={roleProgress}
-          targetSkillIds={syllabus.targetSkillIds}
+          targetSkillIds={modalState.groupsEarnedXp}
           onContinue={handleModuleCompleteContinue}
           onSeeProgress={() => {
-            setModalState({ type: "skill-progress" });
+            // Preferred: exit LEX into My Learning → Skills tab. Fall back to the
+            // in-LEX modal if no navigation handler was wired (e.g., in storybook).
+            if (onSeeSkillProgress) {
+              setModalState({ type: "none" });
+              onSeeSkillProgress();
+            } else {
+              setModalState({ type: "skill-progress" });
+            }
           }}
         />
       )}

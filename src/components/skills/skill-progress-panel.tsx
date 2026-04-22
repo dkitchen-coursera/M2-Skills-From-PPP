@@ -2,22 +2,26 @@
 
 import {
   computeOverallMastery,
-  getSkillsByPriority,
-  type RoleProgress,
+  computeOverallMasteryGroups,
+  getRoleUnits,
+  isGroupRoleProgress,
+  type AnyRoleProgress,
 } from "@/lib/skills-store";
 import { SkillXpBar } from "./skill-xp-bar";
 
 interface SkillProgressPanelProps {
-  progress: RoleProgress;
+  progress: AnyRoleProgress;
 }
 
 export function SkillProgressPanel({ progress }: SkillProgressPanelProps) {
-  const sortedSkills = getSkillsByPriority(progress);
-  const overallPercent = computeOverallMastery(progress);
-  const shouldCount = sortedSkills.filter((s) => s.priority === "should").length;
-  const masteredCount = sortedSkills.filter(
-    (s) => s.priority === "should" && s.level === "Mastered"
-  ).length;
+  // Shape-agnostic: getRoleUnits returns a normalized list with displayNames.
+  const units = getRoleUnits(progress);
+  const overallPercent = isGroupRoleProgress(progress)
+    ? computeOverallMasteryGroups(progress)
+    : computeOverallMastery(progress);
+  const requiredUnits = units.filter((u) => u.required);
+  const shouldCount = requiredUnits.length;
+  const masteredCount = requiredUnits.filter((u) => u.stage === "Mastered").length;
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -51,17 +55,14 @@ export function SkillProgressPanel({ progress }: SkillProgressPanelProps) {
 
       {/* Skill list */}
       <div className="space-y-3">
-        {sortedSkills.map((skill) => (
-          <div key={skill.skillId}>
+        {units.map((unit) => (
+          <div key={unit.key}>
             <div className="mb-1 flex items-center justify-between">
               <span className="text-sm font-medium text-gray-800">
-                {skill.skillName}
-              </span>
-              <span className="text-[10px] text-gray-400">
-                {Object.keys(skill.expressions).length} expressions
+                {unit.displayName}
               </span>
             </div>
-            <SkillXpBar currentXp={skill.currentXp} level={skill.level} xpMax={skill.xpMax} />
+            <SkillXpBar currentXp={unit.currentXp} level={unit.stage} xpMax={unit.xpMax} />
           </div>
         ))}
       </div>

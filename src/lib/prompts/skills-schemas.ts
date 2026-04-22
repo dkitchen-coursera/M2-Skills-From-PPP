@@ -13,13 +13,21 @@ export const identifyRoleInputSchema = z.object({
     .describe("Human-readable role title (e.g., 'Data Analyst')"),
   shouldSkills: z
     .array(z.string())
-    .describe("Skill IDs the learner MUST master (primary gaps)"),
+    .describe(
+      "For area-model roles: skill area IDs the learner MUST master. " +
+        "For group-model roles (Data Analyst): mastery group keys (e.g. 'tableau-software::intermediate') the learner MUST master. " +
+        "These are the primary gaps.",
+    ),
   mightSkills: z
     .array(z.string())
-    .describe("Skill IDs the learner might need to deepen"),
+    .describe(
+      "Skill area IDs (area-model) or mastery group keys (group-model) the learner might need to deepen.",
+    ),
   optionalSkills: z
     .array(z.string())
-    .describe("Skill IDs that are nice-to-have"),
+    .describe(
+      "Skill area IDs (area-model) or mastery group keys (group-model) that are nice-to-have.",
+    ),
 });
 
 export type IdentifyRoleInput = z.infer<typeof identifyRoleInputSchema>;

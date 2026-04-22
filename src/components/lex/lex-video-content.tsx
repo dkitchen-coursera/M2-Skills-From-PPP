@@ -107,7 +107,7 @@ export function LexVideoContent({ item, nextItem, onComplete, onNext }: LexVideo
   const elapsed = Math.floor((progress / 100) * totalSeconds);
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-  const skillSubtitle = item.skillTags[0] ?? "Visualizing and Reporting Clean Data";
+  const skillSubtitle = item.skillTags[0] ?? "";
 
   return (
     <div className="flex h-full w-full flex-1 flex-col overflow-y-auto">
@@ -203,11 +203,14 @@ export function LexVideoContent({ item, nextItem, onComplete, onNext }: LexVideo
           <h2 className="text-2xl font-bold leading-8 tracking-tight text-[#0f1114]">
             {item.title}
           </h2>
-          <p className="mt-1 text-sm text-[#5b6780]">
-            <span className="font-semibold text-[#946100]">{item.xpValue} XP</span>
-            <span className="mx-1.5">·</span>
-            {skillSubtitle}
-          </p>
+          {/* XP + skill tag — only shown when the item awards skill XP. */}
+          {skillSubtitle && (
+            <p className="mt-1 text-sm text-[#5b6780]">
+              <span className="font-semibold text-[#946100]">{item.xpValue} XP</span>
+              <span className="mx-1.5">·</span>
+              {skillSubtitle}
+            </p>
+          )}
         </div>
         <button className="shrink-0 text-sm font-semibold text-[#0056d2] hover:underline">
           + Save note

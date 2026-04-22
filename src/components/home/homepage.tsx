@@ -1,7 +1,12 @@
 "use client";
 
 import type { RoleProgress } from "@/lib/skills-store";
-import { computeOverallMastery } from "@/lib/skills-store";
+import {
+  computeOverallMastery,
+  computeOverallMasteryGroups,
+  getRoleUnits,
+  isGroupRoleProgress,
+} from "@/lib/skills-store";
 import { LihpHeader } from "@/components/lihp/lihp-header";
 import { SparkleIcon } from "@/components/shared/sparkle-icon";
 import { UpsellBanner } from "@/components/shared/upsell-banner";
@@ -109,7 +114,11 @@ export function Homepage({
   onUpgrade,
 }: HomepageProps) {
   const hasRole = !!roleTitle;
-  const overallPercent = roleProgress ? computeOverallMastery(roleProgress) : 0;
+  const overallPercent = !roleProgress
+    ? 0
+    : isGroupRoleProgress(roleProgress)
+      ? computeOverallMasteryGroups(roleProgress)
+      : computeOverallMastery(roleProgress);
   // Show upsell when the learner is browsing without C+ access and without a confirmed role
   const showUpsell = !hasCourseraPlus && !hasRole;
 
@@ -183,8 +192,11 @@ export function Homepage({
                     <div className="flex-1">
                       <h2 className="text-lg font-semibold text-[#1f1f1f]">{roleTitle} Mastery</h2>
                       <p className="text-sm text-[#5b6780]">
-                        {Object.values(roleProgress.skills).filter(s => s.currentXp > 0).length} of{" "}
-                        {Object.values(roleProgress.skills).length} skills in progress
+                        {(() => {
+                          const units = getRoleUnits(roleProgress);
+                          const active = units.filter((u) => u.currentXp > 0).length;
+                          return `${active} of ${units.length} skills in progress`;
+                        })()}
                       </p>
                     </div>
                     <button

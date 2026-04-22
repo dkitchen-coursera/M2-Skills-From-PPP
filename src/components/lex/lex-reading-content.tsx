@@ -11,7 +11,11 @@ interface LexReadingContentProps {
 }
 
 export function LexReadingContent({ item, onComplete, onNext }: LexReadingContentProps) {
-  const skillSubtitle = item.skillTags[0] ?? "Visualizing and Reporting Clean Data";
+  // `skillTags` is populated by `computeItemSkillTags` in lex-data.ts — for DA
+  // every item resolves to a {Level} {Skill} mastery label, either from its
+  // expression-XP mapping or the course's target groups. Fallback kept just
+  // in case a legacy-shaped item reaches this component without tags.
+  const skillSubtitle = item.skillTags[0] ?? "";
 
   // Local "marked complete" state — gates the Completed indicator + Next-item CTA.
   // Resets on item change so the next reading starts fresh.
@@ -38,11 +42,16 @@ export function LexReadingContent({ item, onComplete, onNext }: LexReadingConten
           <h1 className="text-2xl font-bold leading-8 tracking-tight text-[#0f1114]">
             {item.title}
           </h1>
-          <p className="mt-1 text-sm text-[#5b6780]">
-            <span className="font-semibold text-[#946100]">{item.xpValue} XP</span>
-            <span className="mx-1.5">·</span>
-            {skillSubtitle}
-          </p>
+          {/* XP + skill tag — only shown when the item awards skill XP. Items
+              without a mapped mastery group don't contribute to progress, so
+              displaying "N XP" would be misleading. */}
+          {skillSubtitle && (
+            <p className="mt-1 text-sm text-[#5b6780]">
+              <span className="font-semibold text-[#946100]">{item.xpValue} XP</span>
+              <span className="mx-1.5">·</span>
+              {skillSubtitle}
+            </p>
+          )}
           <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-[#5b6780]">
             <Clock size={14} strokeWidth={1.75} />
             {item.durationMinutes} min read
